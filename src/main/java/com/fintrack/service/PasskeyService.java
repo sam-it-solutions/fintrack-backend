@@ -109,7 +109,7 @@ public class PasskeyService {
 
   public PasskeyStartResponse startAuthentication(String email) {
     User user = null;
-    StartAssertionOptions.Builder optionsBuilder = StartAssertionOptions.builder();
+    var optionsBuilder = StartAssertionOptions.builder();
     if (email != null && !email.isBlank()) {
       user = userRepository.findByEmail(email)
           .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
