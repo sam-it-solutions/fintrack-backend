@@ -1,30 +1,38 @@
 package com.fintrack.service;
 
-import com.fintrack.config.SyncProperties;
 import com.fintrack.model.ConnectionStatus;
 import com.fintrack.repository.ConnectionRepository;
+import java.time.Duration;
+import java.time.Instant;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
 public class SyncScheduler {
-  private final SyncProperties syncProperties;
   private final ConnectionRepository connectionRepository;
   private final ConnectionService connectionService;
+  private final AppSettingsService appSettingsService;
+  private Instant lastRunAt;
 
-  public SyncScheduler(SyncProperties syncProperties,
-                       ConnectionRepository connectionRepository,
-                       ConnectionService connectionService) {
-    this.syncProperties = syncProperties;
+  public SyncScheduler(ConnectionRepository connectionRepository,
+                       ConnectionService connectionService,
+                       AppSettingsService appSettingsService) {
     this.connectionRepository = connectionRepository;
     this.connectionService = connectionService;
+    this.appSettingsService = appSettingsService;
   }
 
-  @Scheduled(fixedDelayString = "${fintrack.sync.interval-ms:3600000}")
+  @Scheduled(fixedDelayString = "${fintrack.sync.poll-ms:60000}")
   public void run() {
-    if (!syncProperties.enabled()) {
+    if (!appSettingsService.isSyncEnabled()) {
       return;
     }
+    long intervalMs = appSettingsService.getSyncIntervalMs();
+    Instant now = Instant.now();
+    if (lastRunAt != null && Duration.between(lastRunAt, now).toMillis() < intervalMs) {
+      return;
+    }
+    lastRunAt = now;
     connectionRepository.findByAutoSyncEnabledTrueAndStatus(ConnectionStatus.ACTIVE)
         .forEach(connectionService::syncConnection);
   }

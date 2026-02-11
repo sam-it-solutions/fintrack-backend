@@ -22,10 +22,12 @@ public class OpenAiClient {
   private final OpenAiProperties properties;
   private final ObjectMapper objectMapper;
   private final RestClient restClient;
+  private final AppSettingsService appSettingsService;
 
-  public OpenAiClient(OpenAiProperties properties, ObjectMapper objectMapper) {
+  public OpenAiClient(OpenAiProperties properties, ObjectMapper objectMapper, AppSettingsService appSettingsService) {
     this.properties = properties;
     this.objectMapper = objectMapper;
+    this.appSettingsService = appSettingsService;
     String baseUrl = properties.baseUrl() == null || properties.baseUrl().isBlank()
         ? "https://api.openai.com"
         : properties.baseUrl();
@@ -33,15 +35,16 @@ public class OpenAiClient {
   }
 
   public String classify(String systemPrompt, String userPrompt, List<String> allowedCategories) {
-    if (!Boolean.TRUE.equals(properties.enabled())) {
+    if (!appSettingsService.isAiEnabled()) {
       return null;
     }
     if (properties.apiKey() == null || properties.apiKey().isBlank()) {
       return null;
     }
-    String model = properties.model() == null || properties.model().isBlank()
+    String configuredModel = appSettingsService.getAiModel();
+    String model = configuredModel == null || configuredModel.isBlank()
         ? "gpt-4.1-mini"
-        : properties.model();
+        : configuredModel;
 
     Map<String, Object> body = Map.of(
         "model", model,
