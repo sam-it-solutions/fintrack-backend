@@ -16,6 +16,7 @@ import com.fintrack.provider.coingecko.CoinGeckoClient;
 import com.fintrack.repository.AccountTransactionRepository;
 import com.fintrack.repository.FinancialAccountRepository;
 import com.fintrack.service.CategoryService;
+import com.fintrack.service.SyncProgressService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -38,17 +39,20 @@ public class BitvavoProvider implements ConnectionProvider {
   private final AccountTransactionRepository transactionRepository;
   private final CategoryService categoryService;
   private final CoinGeckoClient coinGeckoClient;
+  private final SyncProgressService syncProgressService;
 
   public BitvavoProvider(BitvavoClient client,
                          FinancialAccountRepository accountRepository,
                          AccountTransactionRepository transactionRepository,
                          CategoryService categoryService,
-                         CoinGeckoClient coinGeckoClient) {
+                         CoinGeckoClient coinGeckoClient,
+                         SyncProgressService syncProgressService) {
     this.client = client;
     this.accountRepository = accountRepository;
     this.transactionRepository = transactionRepository;
     this.categoryService = categoryService;
     this.coinGeckoClient = coinGeckoClient;
+    this.syncProgressService = syncProgressService;
   }
 
   @Override
@@ -77,6 +81,7 @@ public class BitvavoProvider implements ConnectionProvider {
       throw new IllegalArgumentException("apiKey and apiSecret are required");
     }
 
+    syncProgressService.update(connection, "Prijzen ophalen", 10);
     List<BitvavoClient.TickerPrice> prices = client.getTickerPrices();
     Map<String, BigDecimal> priceByMarket = prices == null ? Map.of() : prices.stream()
         .filter(p -> p.market() != null && p.price() != null)
@@ -85,6 +90,7 @@ public class BitvavoProvider implements ConnectionProvider {
             p -> new BigDecimal(p.price()),
             (a, b) -> a));
 
+    syncProgressService.update(connection, "Balances ophalen", 25);
     List<BitvavoClient.Balance> balances = client.getBalances(apiKey, apiSecret);
     log.info("Bitvavo sync balances: {}", balances == null ? 0 : balances.size());
     List<String> markets = balances == null ? List.of() : balances.stream()
@@ -145,6 +151,7 @@ public class BitvavoProvider implements ConnectionProvider {
       }
     }
 
+    syncProgressService.update(connection, "Trades ophalen", 70);
     int transactionsImported = 0;
     List<BitvavoClient.Transaction> transactions;
     try {
@@ -213,6 +220,7 @@ public class BitvavoProvider implements ConnectionProvider {
       }
     }
 
+    syncProgressService.update(connection, "Afwerken", 95);
     return new SyncResult(accountsUpdated, transactionsImported, "OK");
   }
 

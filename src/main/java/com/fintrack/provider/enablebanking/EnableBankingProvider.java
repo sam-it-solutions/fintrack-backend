@@ -18,6 +18,7 @@ import com.fintrack.provider.SyncResult;
 import com.fintrack.repository.AccountTransactionRepository;
 import com.fintrack.repository.FinancialAccountRepository;
 import com.fintrack.service.CategoryService;
+import com.fintrack.service.SyncProgressService;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -47,19 +48,22 @@ public class EnableBankingProvider implements ConnectionProvider {
   private final FinancialAccountRepository accountRepository;
   private final AccountTransactionRepository transactionRepository;
   private final CategoryService categoryService;
+  private final SyncProgressService syncProgressService;
 
   public EnableBankingProvider(EnableBankingClient client,
                                EnableBankingProperties properties,
                                AppProperties appProperties,
                                FinancialAccountRepository accountRepository,
                                AccountTransactionRepository transactionRepository,
-                               CategoryService categoryService) {
+                               CategoryService categoryService,
+                               SyncProgressService syncProgressService) {
     this.client = client;
     this.properties = properties;
     this.appProperties = appProperties;
     this.accountRepository = accountRepository;
     this.transactionRepository = transactionRepository;
     this.categoryService = categoryService;
+    this.syncProgressService = syncProgressService;
   }
 
   @Override
@@ -131,7 +135,9 @@ public class EnableBankingProvider implements ConnectionProvider {
     int accountsUpdated = 0;
     int transactionsImported = 0;
 
+    syncProgressService.update(connection, "Sessie ophalen", 10);
     JsonNode sessionResponse = client.getSession(sessionId);
+    syncProgressService.update(connection, "Accounts ophalen", 20);
     List<String> accountIds = new ArrayList<>(extractAccountIds(sessionResponse));
     List<String> configured = parseAccountIds(config.get("accountIds"));
     for (String configuredId : configured) {
@@ -143,7 +149,15 @@ public class EnableBankingProvider implements ConnectionProvider {
       throw new IllegalStateException("Enable Banking returned no account ids. Reconnect the bank to refresh consent.");
     }
 
+    int totalAccounts = accountIds.size();
+    int accountIndex = 0;
     for (String accountId : accountIds) {
+      accountIndex++;
+      int progress = 30 + (int) Math.round((accountIndex / (double) Math.max(totalAccounts, 1)) * 60);
+      syncProgressService.update(
+          connection,
+          "Account " + accountIndex + " van " + totalAccounts + " synchroniseren",
+          progress);
       JsonNode details = client.getAccountDetails(accountId);
       String name = firstNonBlank(text(details, "name"), text(details, "product"), text(details, "cash_account_type"));
       String currency = firstNonBlank(text(details, "currency"), text(details, "account.currency"), "EUR");
@@ -370,6 +384,7 @@ public class EnableBankingProvider implements ConnectionProvider {
       } while (continuationKey != null && !continuationKey.isBlank());
     }
 
+    syncProgressService.update(connection, "Afwerken", 95);
     return new SyncResult(accountsUpdated, transactionsImported, "OK");
   }
 

@@ -9,6 +9,7 @@ import com.fintrack.dto.ProviderResponse;
 import com.fintrack.dto.UpdateConnectionRequest;
 import com.fintrack.model.Connection;
 import com.fintrack.model.ConnectionStatus;
+import com.fintrack.model.SyncStatus;
 import com.fintrack.provider.ConnectResult;
 import com.fintrack.provider.ConnectionProvider;
 import com.fintrack.provider.ProviderRegistry;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -62,6 +64,7 @@ public class ConnectionService {
         : request.getDisplayName());
     connection.setStatus(provider.getMetadata().isRequiresAuth() ? ConnectionStatus.PENDING : ConnectionStatus.ACTIVE);
     connection.setAutoSyncEnabled(true);
+    connection.setSyncStatus(SyncStatus.IDLE);
     connection.setEncryptedConfig(storeConfig(request.getConfig()));
     Connection saved = connectionRepository.save(connection);
     return toResponse(saved);
@@ -106,31 +109,71 @@ public class ConnectionService {
     return new ConnectResponse(result.redirectUrl());
   }
 
-  public void syncConnection(UUID userId, UUID connectionId) {
+  public ConnectionResponse syncConnection(UUID userId, UUID connectionId) {
     Connection connection = connectionRepository.findByIdAndUserId(connectionId, userId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Connection not found"));
-    syncConnection(connection);
+    return requestSync(connection);
   }
 
   public void syncConnectionById(UUID connectionId) {
     Connection connection = connectionRepository.findById(connectionId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Connection not found"));
-    syncConnection(connection);
+    requestSync(connection);
   }
 
   public void syncConnection(Connection connection) {
-    if (connection.getStatus() == ConnectionStatus.DISABLED) {
+    if (!prepareSync(connection)) {
+      connectionRepository.save(connection);
       return;
+    }
+    connectionRepository.save(connection);
+    performSync(connection);
+  }
+
+  private ConnectionResponse requestSync(Connection connection) {
+    if (!prepareSync(connection)) {
+      return toResponse(connectionRepository.save(connection));
+    }
+    Connection saved = connectionRepository.save(connection);
+    syncConnectionAsync(saved.getId());
+    return toResponse(saved);
+  }
+
+  @Async
+  public void syncConnectionAsync(UUID connectionId) {
+    Connection connection = connectionRepository.findById(connectionId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Connection not found"));
+    performSync(connection);
+  }
+
+  private boolean prepareSync(Connection connection) {
+    if (connection.getStatus() == ConnectionStatus.DISABLED) {
+      return false;
+    }
+    if (connection.getSyncStatus() == SyncStatus.RUNNING) {
+      return false;
     }
     if (shouldBackoffRateLimit(connection)) {
       Instant retryAt = nextAllowedSync(connection);
-      if (retryAt != null) {
-        connection.setStatus(ConnectionStatus.ERROR);
-        connection.setErrorMessage("Rate limit actief. Probeer opnieuw na " + retryAt.toString());
-        connectionRepository.save(connection);
+      if (retryAt == null) {
+        retryAt = Instant.now().plus(24, ChronoUnit.HOURS);
       }
-      return;
+      connection.setSyncStatus(SyncStatus.SKIPPED);
+      connection.setSyncStage("Rate limit actief");
+      connection.setSyncProgress(0);
+      connection.setLastSyncCompletedAt(Instant.now());
+      connection.setLastSyncError("Rate limit actief. Probeer opnieuw na " + retryAt.toString());
+      return false;
     }
+    connection.setSyncStatus(SyncStatus.RUNNING);
+    connection.setLastSyncStartedAt(Instant.now());
+    connection.setLastSyncError(null);
+    connection.setSyncStage("Voorbereiden");
+    connection.setSyncProgress(5);
+    return true;
+  }
+
+  private void performSync(Connection connection) {
     ConnectionStatus previous = connection.getStatus();
     ConnectionProvider provider = providerRegistry.require(connection.getProviderId());
     Map<String, String> config = loadConfig(connection);
@@ -138,9 +181,19 @@ public class ConnectionService {
       provider.sync(connection, config);
       connection.setStatus(ConnectionStatus.ACTIVE);
       connection.setErrorMessage(null);
-      connection.setLastSyncedAt(java.time.Instant.now());
+      connection.setLastSyncedAt(Instant.now());
+      connection.setSyncStatus(SyncStatus.SUCCESS);
+      connection.setLastSyncCompletedAt(Instant.now());
+      connection.setLastSyncError(null);
+      connection.setSyncStage("Klaar");
+      connection.setSyncProgress(100);
     } catch (Exception ex) {
       connection.setStatus(ConnectionStatus.ERROR);
+      connection.setSyncStatus(SyncStatus.FAILED);
+      connection.setLastSyncCompletedAt(Instant.now());
+      connection.setLastSyncError(ex.getMessage());
+      connection.setSyncStage("Mislukt");
+      connection.setSyncProgress(100);
       if (isRateLimitError(ex.getMessage())) {
         Instant retryAt = nextAllowedSync(connection);
         if (retryAt == null) {
@@ -235,6 +288,12 @@ public class ConnectionService {
         connection.getStatus(),
         connection.isAutoSyncEnabled(),
         connection.getLastSyncedAt(),
+        connection.getSyncStatus(),
+        connection.getSyncStage(),
+        connection.getSyncProgress(),
+        connection.getLastSyncStartedAt(),
+        connection.getLastSyncCompletedAt(),
+        connection.getLastSyncError(),
         connection.getErrorMessage(),
         connection.getCreatedAt());
   }

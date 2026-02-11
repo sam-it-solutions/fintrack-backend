@@ -157,9 +157,9 @@ public class ConnectionController {
 
   @PostMapping("/connections/{connectionId}/sync")
   @ResponseStatus(HttpStatus.ACCEPTED)
-  public void sync(@PathVariable UUID connectionId) {
+  public ConnectionResponse sync(@PathVariable UUID connectionId) {
     UUID userId = currentUserService.requireUserId();
-    connectionService.syncConnection(userId, connectionId);
+    return connectionService.syncConnection(userId, connectionId);
   }
 
   @DeleteMapping("/connections/{connectionId}")

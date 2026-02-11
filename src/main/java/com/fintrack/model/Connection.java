@@ -53,6 +53,25 @@ public class Connection {
   @Column
   private Instant lastSyncedAt;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "sync_status")
+  private SyncStatus syncStatus = SyncStatus.IDLE;
+
+  @Column(name = "sync_stage")
+  private String syncStage;
+
+  @Column(name = "sync_progress")
+  private Integer syncProgress;
+
+  @Column
+  private Instant lastSyncStartedAt;
+
+  @Column
+  private Instant lastSyncCompletedAt;
+
+  @Column(columnDefinition = "TEXT")
+  private String lastSyncError;
+
   @Column
   private Instant createdAt;
 

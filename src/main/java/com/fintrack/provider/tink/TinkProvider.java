@@ -17,6 +17,7 @@ import com.fintrack.provider.SyncResult;
 import com.fintrack.repository.AccountTransactionRepository;
 import com.fintrack.repository.FinancialAccountRepository;
 import com.fintrack.service.CategoryService;
+import com.fintrack.service.SyncProgressService;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -38,19 +39,22 @@ public class TinkProvider implements ConnectionProvider {
   private final FinancialAccountRepository accountRepository;
   private final AccountTransactionRepository transactionRepository;
   private final CategoryService categoryService;
+  private final SyncProgressService syncProgressService;
 
   public TinkProvider(TinkClient client,
                       TinkProperties properties,
-                      AppProperties appProperties,
-                      FinancialAccountRepository accountRepository,
-                      AccountTransactionRepository transactionRepository,
-                      CategoryService categoryService) {
+                     AppProperties appProperties,
+                     FinancialAccountRepository accountRepository,
+                     AccountTransactionRepository transactionRepository,
+                     CategoryService categoryService,
+                     SyncProgressService syncProgressService) {
     this.client = client;
     this.properties = properties;
     this.appProperties = appProperties;
     this.accountRepository = accountRepository;
     this.transactionRepository = transactionRepository;
     this.categoryService = categoryService;
+    this.syncProgressService = syncProgressService;
   }
 
   @Override
@@ -116,6 +120,7 @@ public class TinkProvider implements ConnectionProvider {
       throw new IllegalStateException("Missing Tink access token. Complete the consent flow first.");
     }
 
+    syncProgressService.update(connection, "Accounts ophalen", 15);
     int accountsUpdated = 0;
     int transactionsImported = 0;
     String nextAccountPage = null;
@@ -186,6 +191,8 @@ public class TinkProvider implements ConnectionProvider {
         account.setLastSyncedAt(Instant.now());
         accountRepository.save(account);
         accountsUpdated++;
+        int progress = Math.min(90, 25 + accountsUpdated * 8);
+        syncProgressService.update(connection, "Transacties ophalen", progress);
         String nextTxPage = null;
         do {
           JsonNode transactionsResponse = client.listTransactions(accessToken, accountId, nextTxPage);
@@ -279,6 +286,7 @@ public class TinkProvider implements ConnectionProvider {
       }
     } while (nextAccountPage != null && !nextAccountPage.isBlank());
 
+    syncProgressService.update(connection, "Afwerken", 95);
     return new SyncResult(accountsUpdated, transactionsImported, "OK");
   }
 
