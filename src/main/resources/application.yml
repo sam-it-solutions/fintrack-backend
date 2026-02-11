@@ -37,11 +37,11 @@ fintrack:
     frontend-url: ${FRONTEND_URL:http://localhost:4200}
     backend-url: ${BACKEND_URL:http://localhost:8085}
   jwt:
-    secret: change-me-in-prod-change-this-value
+    secret: ${JWT_SECRET:change-me-in-prod-change-this-value}
     issuer: fintrack
     ttl-minutes: 120
   crypto:
-    secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+    secret: ${CRYPTO_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
   passkeys:
     rp-id: ${PASSKEY_RP_ID:localhost}
     rp-name: Fintrack
