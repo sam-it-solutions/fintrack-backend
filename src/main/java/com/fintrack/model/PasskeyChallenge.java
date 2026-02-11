@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -29,8 +28,7 @@ public class PasskeyChallenge {
   @Column(name = "challenge_type", nullable = false, length = 32)
   private String type;
 
-  @Lob
-  @Column(name = "options_json", nullable = false)
+  @Column(name = "options_json", nullable = false, columnDefinition = "text")
   private String optionsJson;
 
   @Column(name = "created_at", nullable = false)

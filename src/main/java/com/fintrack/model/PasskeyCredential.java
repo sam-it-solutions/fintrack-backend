@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
@@ -29,8 +28,7 @@ public class PasskeyCredential {
   @Column(name = "credential_id", nullable = false, unique = true, length = 512)
   private String credentialId;
 
-  @Lob
-  @Column(name = "public_key_cose", nullable = false)
+  @Column(name = "public_key_cose", nullable = false, columnDefinition = "bytea")
   private byte[] publicKeyCose;
 
   @Column(name = "signature_count", nullable = false)

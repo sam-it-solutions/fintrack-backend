@@ -27,12 +27,16 @@ import java.time.Instant;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class PasskeyService {
+  private static final Logger log = LoggerFactory.getLogger(PasskeyService.class);
   private static final Duration CHALLENGE_TTL = Duration.ofMinutes(10);
 
   private final RelyingParty relyingParty;
@@ -77,6 +81,7 @@ public class PasskeyService {
     return new PasskeyStartResponse(challenge.getId(), toJsonNode(json));
   }
 
+  @Transactional
   public void finishRegistration(UUID userId, UUID challengeId, JsonNode credential) {
     PasskeyChallenge challenge = challengeRepository.findByIdAndType(challengeId, "REGISTRATION")
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Challenge not found"));
@@ -96,6 +101,7 @@ public class PasskeyService {
               .response(pkc)
               .build());
     } catch (Exception ex) {
+      log.warn("Passkey registration failed for challenge {}", challengeId, ex);
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Passkey registratie mislukt");
     }
     PasskeyCredential stored = new PasskeyCredential();
@@ -128,6 +134,7 @@ public class PasskeyService {
     }
   }
 
+  @Transactional
   public AuthResponse finishAuthentication(UUID challengeId, JsonNode credential) {
     PasskeyChallenge challenge = challengeRepository.findByIdAndType(challengeId, "AUTHENTICATION")
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Challenge not found"));
@@ -170,6 +177,7 @@ public class PasskeyService {
               .response(pkc)
               .build());
     } catch (Exception ex) {
+      log.warn("Passkey login failed", ex);
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Passkey login mislukt");
     }
   }
