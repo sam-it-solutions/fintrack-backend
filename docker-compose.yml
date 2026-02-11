@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:15
+    container_name: fintrack-db
+    environment:
+      POSTGRES_USER: fintrack
+      POSTGRES_PASSWORD: fintrack
+      POSTGRES_DB: fintrack
+    ports:
+      - "5434:5432"
+    volumes:
+      - fintrack-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  fintrack-data:
+    driver: local

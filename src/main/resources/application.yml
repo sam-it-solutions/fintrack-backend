@@ -1,0 +1,95 @@
+server:
+  port: ${PORT:8085}
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5434/fintrack}
+    username: ${SPRING_DATASOURCE_USERNAME:fintrack}
+    password: ${SPRING_DATASOURCE_PASSWORD:fintrack}
+  sql:
+    init:
+      mode: always
+  jpa:
+    hibernate:
+      ddl-auto: update
+    defer-datasource-initialization: true
+    open-in-view: false
+  mail:
+    host: smtp.example.com
+    port: 587
+    username: your-user
+    password: your-pass
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+fintrack:
+  ai:
+    openai:
+      enabled: true
+      api-key: ${OPENAI_API_KEY:}
+      base-url: https://api.openai.com
+      model: gpt-4.1-mini
+  app:
+    frontend-url: ${FRONTEND_URL:http://localhost:4200}
+    backend-url: ${BACKEND_URL:http://localhost:8085}
+  jwt:
+    secret: change-me-in-prod-change-this-value
+    issuer: fintrack
+    ttl-minutes: 120
+  crypto:
+    secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+  passkeys:
+    rp-id: ${PASSKEY_RP_ID:localhost}
+    rp-name: Fintrack
+    origin: ${PASSKEY_ORIGIN:http://localhost:4200}
+  sync:
+    enabled: true
+    interval-ms: 21600000
+  mail:
+    enabled: false
+    from: no-reply@fintrack.local
+    subject-prefix: "[Fintrack] "
+  providers:
+    coingecko:
+      base-url: https://api.coingecko.com/api/v3
+      api-key: ${COINGECKO_API_KEY:}
+      api-key-header: ${COINGECKO_API_KEY_HEADER:}
+      cache-ttl: 10m
+    enablebanking:
+      base-url: https://api.enablebanking.com
+      environment: ${ENABLE_BANKING_ENV:sandbox}
+      sandbox-app-id: 190ca720-88f7-485e-98f5-09ba7c50bda0
+      production-app-id: 5b39c89a-3eb9-43ad-92ca-34daf3f72382
+      redirect-url: ${ENABLEBANKING_REDIRECT_URL:${fintrack.app.backend-url}/api/providers/enablebanking/callback}
+      private-key-path: ${ENABLE_BANKING_PRIVATE_KEY_PATH:}
+      private-key-prod-path: ${ENABLE_BANKING_PRIVATE_KEY_PROD_PATH:}
+      default-country: BE
+      default-psu-type: personal
+      default-language: en
+      consent-days: 30
+      debug-log-responses: true
+    tink:
+      base-url: https://api.tink.com
+      link-url-template: https://link.tink.com/1.0/authorize/?response_type=code&client_id={clientId}&redirect_uri={redirectUrl}&market={market}&locale={locale}&scope={scope}&state={state}&external_user_id={externalUserId}
+      client-id: 1f47c145180744c0b0ab88f0e9947c9c
+      client-secret: d84278793a7946ae92d3bfb6ec69df36
+      redirect-url: ${TINK_REDIRECT_URL:${fintrack.app.backend-url}/api/providers/tink/callback}
+      market: BE
+      locale: en_US
+      scope: accounts:read,transactions:read
+      token-path: /api/v1/oauth/token
+      accounts-path: /data/v2/accounts
+      transactions-path: /data/v2/transactions
+      data-content-type: application/json
+      debug-log-responses: false
+    bitvavo:
+      base-url: https://api.bitvavo.com/v2
+
+logging:
+  level:
+    com.fintrack.provider.bitvavo: INFO
+ 
