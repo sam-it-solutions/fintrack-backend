@@ -16,6 +16,7 @@ import com.yubico.webauthn.RelyingParty;
 import com.yubico.webauthn.StartAssertionOptions;
 import com.yubico.webauthn.StartRegistrationOptions;
 import com.yubico.webauthn.AssertionRequest;
+import com.yubico.webauthn.AssertionResult;
 import com.yubico.webauthn.data.ByteArray;
 import com.yubico.webauthn.data.PublicKeyCredential;
 import com.yubico.webauthn.data.PublicKeyCredentialCreationOptions;
@@ -107,15 +108,14 @@ public class PasskeyService {
   }
 
   public PasskeyStartResponse startAuthentication(String email) {
-    if (email == null || email.isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email required");
+    User user = null;
+    StartAssertionOptions.Builder optionsBuilder = StartAssertionOptions.builder();
+    if (email != null && !email.isBlank()) {
+      user = userRepository.findByEmail(email)
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+      optionsBuilder.username(user.getEmail());
     }
-    User user = userRepository.findByEmail(email)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-    AssertionRequest request = relyingParty.startAssertion(
-        StartAssertionOptions.builder()
-            .username(user.getEmail())
-            .build());
+    AssertionRequest request = relyingParty.startAssertion(optionsBuilder.build());
     PasskeyChallenge challenge = new PasskeyChallenge();
     challenge.setUser(user);
     challenge.setType("AUTHENTICATION");
@@ -137,8 +137,7 @@ public class PasskeyService {
     if (!result.isSuccess()) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid passkey");
     }
-    User user = userRepository.findByEmail(result.getUsername())
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+    User user = resolveUserForAssertion(challenge, result);
     updateSignatureCount(result.getCredentialId(), result.getSignatureCount());
     challengeRepository.delete(challenge);
     String token = jwtService.generateToken(user.getId(), user.getEmail());
@@ -173,6 +172,24 @@ public class PasskeyService {
     } catch (Exception ex) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Passkey login mislukt");
     }
+  }
+
+  private User resolveUserForAssertion(PasskeyChallenge challenge, AssertionResult result) {
+    User user;
+    String username = result.getUsername();
+    if (username != null && !username.isBlank()) {
+      user = userRepository.findByEmail(username)
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+    } else {
+      String encoded = Base64Url.encode(result.getCredentialId().getBytes());
+      PasskeyCredential cred = credentialRepository.findByCredentialId(encoded)
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+      user = cred.getUser();
+    }
+    if (challenge.getUser() != null && !challenge.getUser().getId().equals(user.getId())) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid passkey");
+    }
+    return user;
   }
 
   private void ensureNotExpired(PasskeyChallenge challenge) {
