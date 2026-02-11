@@ -4,6 +4,7 @@
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/ProviderField.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/repository/HouseholdRepository.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/config/CorsConfig.java
+/Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/SyncStatus.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/PasskeyChallenge.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/UpdateTransactionCategoryRequest.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/provider/bitvavo/BitvavoClient.java
@@ -28,6 +29,7 @@
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/controller/HouseholdController.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/service/NoopNotificationService.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/HouseholdJoinRequest.java
+/Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/config/AsyncConfig.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/repository/ConnectionRepository.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/config/EnableBankingProperties.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/User.java
@@ -73,6 +75,7 @@
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/CreateConnectionRequest.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/service/CurrentUserService.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/config/SecurityConfig.java
+/Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/service/SyncProgressService.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/controller/CategoryController.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/TransactionDirection.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/EnableBankingAspspResponse.java

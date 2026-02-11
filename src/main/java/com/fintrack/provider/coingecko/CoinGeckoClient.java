@@ -12,6 +12,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
@@ -20,6 +22,7 @@ import org.springframework.web.client.RestClient;
 
 @Component
 public class CoinGeckoClient {
+  private static final Logger log = LoggerFactory.getLogger(CoinGeckoClient.class);
   private static final int MAX_SYMBOLS_PER_REQUEST = 50;
   private static final Duration DEFAULT_CACHE_TTL = Duration.ofMinutes(10);
   private static final Duration DEFAULT_SYMBOL_CACHE_TTL = Duration.ofHours(12);
@@ -96,8 +99,11 @@ public class CoinGeckoClient {
       List<String> ids = new ArrayList<>();
       Map<String, String> idToSymbol = new HashMap<>();
       for (String symbol : symbols) {
-        String id = symbolToIdCache.get(symbol);
-        if (id == null) {
+        String id = resolveId(symbol);
+        if (!StringUtils.hasText(id) && SYMBOL_PATTERN.matcher(symbol).matches()) {
+          id = symbol;
+        }
+        if (!StringUtils.hasText(id)) {
           continue;
         }
         ids.add(id);
@@ -132,7 +138,8 @@ public class CoinGeckoClient {
           priceCache.put(symbol, new CachedPrice(eur, now));
         }
       }
-    } catch (Exception ignored) {
+    } catch (Exception ex) {
+      log.warn("CoinGecko price fetch failed: {}", ex.getMessage());
       // Keep cached values if the request fails.
     }
   }
@@ -174,13 +181,59 @@ public class CoinGeckoClient {
       symbolToIdCache.clear();
       symbolToIdCache.putAll(nextCache);
       symbolCacheUpdatedAt = now;
-    } catch (Exception ignored) {
+    } catch (Exception ex) {
+      log.warn("CoinGecko symbol cache refresh failed: {}", ex.getMessage());
       symbolToIdCache.putAll(SYMBOL_OVERRIDES);
       // Keep existing cache.
     }
   }
 
+  private String resolveId(String symbol) {
+    String cached = symbolToIdCache.get(symbol);
+    if (StringUtils.hasText(cached)) {
+      return cached;
+    }
+    if (symbolToIdCache.containsKey(symbol)) {
+      return null;
+    }
+    String resolved = resolveViaSearch(symbol);
+    if (StringUtils.hasText(resolved)) {
+      symbolToIdCache.put(symbol, resolved);
+      return resolved;
+    }
+    symbolToIdCache.put(symbol, "");
+    return null;
+  }
+
+  private String resolveViaSearch(String symbol) {
+    try {
+      SearchResponse response = restClient.get()
+          .uri(uriBuilder -> uriBuilder.path("/search").queryParam("query", symbol).build())
+          .retrieve()
+          .body(SearchResponse.class);
+      if (response == null || response.coins() == null) {
+        return null;
+      }
+      for (SearchCoin coin : response.coins()) {
+        if (coin == null || !StringUtils.hasText(coin.symbol()) || !StringUtils.hasText(coin.id())) {
+          continue;
+        }
+        if (symbol.equalsIgnoreCase(coin.symbol())) {
+          return coin.id();
+        }
+      }
+      return null;
+    } catch (Exception ex) {
+      log.warn("CoinGecko search failed for {}: {}", symbol, ex.getMessage());
+      return null;
+    }
+  }
+
   private record CoinListItem(String id, String symbol, String name) {}
+
+  private record SearchResponse(List<SearchCoin> coins) {}
+
+  private record SearchCoin(String id, String symbol, String name) {}
 
   private record CachedPrice(BigDecimal price, Instant fetchedAt) {
     boolean isExpired(Instant now, Duration ttl) {

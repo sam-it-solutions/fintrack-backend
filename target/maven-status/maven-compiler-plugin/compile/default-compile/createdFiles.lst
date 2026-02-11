@@ -2,6 +2,7 @@ com/fintrack/model/User.class
 com/fintrack/service/SyncScheduler.class
 com/fintrack/provider/coingecko/CoinGeckoClient$CachedPrice.class
 com/fintrack/config/BitvavoProperties.class
+com/fintrack/provider/coingecko/CoinGeckoClient$SearchCoin.class
 com/fintrack/provider/bitvavo/BitvavoClient$Transaction.class
 com/fintrack/dto/RuleResponse.class
 com/fintrack/config/CryptoProperties.class
@@ -84,6 +85,7 @@ com/fintrack/provider/ProviderRegistry.class
 com/fintrack/dto/TransactionResponse.class
 com/fintrack/repository/PasskeyChallengeRepository.class
 com/fintrack/model/CategoryOverride$MatchType.class
+com/fintrack/model/SyncStatus.class
 com/fintrack/provider/bitvavo/BitvavoClient.class
 com/fintrack/model/PasskeyChallenge.class
 com/fintrack/provider/enablebanking/EnableBankingClient$Aspsp.class
@@ -106,10 +108,12 @@ com/fintrack/dto/EnableBankingAspspResponse.class
 com/fintrack/provider/tink/TinkClient.class
 com/fintrack/provider/enablebanking/EnableBankingClient.class
 com/fintrack/provider/coingecko/CoinGeckoClient$2.class
+com/fintrack/service/SyncProgressService.class
 com/fintrack/service/PasskeyCredentialStore.class
 com/fintrack/dto/HouseholdResponse.class
 com/fintrack/service/ConnectionService.class
 com/fintrack/provider/coingecko/CoinGeckoClient.class
+com/fintrack/provider/coingecko/CoinGeckoClient$SearchResponse.class
 com/fintrack/model/HouseholdMember.class
 com/fintrack/service/PasskeyCredentialStore$Base64Url.class
 com/fintrack/dto/CreateAccountRequest.class
@@ -119,6 +123,7 @@ com/fintrack/service/TinkService$1.class
 com/fintrack/service/ConnectionService$1.class
 com/fintrack/dto/AccountShareRequest.class
 com/fintrack/dto/SummaryResponse.class
+com/fintrack/config/AsyncConfig.class
 com/fintrack/service/CategoryService$CachedAccounts.class
 com/fintrack/provider/coingecko/CoinGeckoClient$CoinListItem.class
 com/fintrack/service/CategoryService$CategoryResult.class
