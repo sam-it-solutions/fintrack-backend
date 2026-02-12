@@ -57,38 +57,66 @@ public class CoinGeckoClient {
 
   public Map<String, BigDecimal> getEurPricesBySymbols(Collection<String> symbols) {
     Map<String, BigDecimal> result = new HashMap<>();
-    if (symbols == null || symbols.isEmpty()) {
+    List<String> normalized = normalizeSymbols(symbols);
+    if (normalized.isEmpty()) {
       return result;
     }
-    List<String> normalized = symbols.stream()
+    Instant now = Instant.now();
+    fetchMissing(normalized, now);
+    for (String symbol : normalized) {
+      CachedPrice cached = priceCache.get(symbol);
+      if (cached != null && cached.price() != null) {
+        result.put(symbol.toUpperCase(Locale.ROOT), cached.price());
+      }
+    }
+    return result;
+  }
+
+  public Map<String, BigDecimal> getEurChangePctBySymbols(Collection<String> symbols) {
+    Map<String, BigDecimal> result = new HashMap<>();
+    List<String> normalized = normalizeSymbols(symbols);
+    if (normalized.isEmpty()) {
+      return result;
+    }
+    Instant now = Instant.now();
+    fetchMissing(normalized, now);
+    for (String symbol : normalized) {
+      CachedPrice cached = priceCache.get(symbol);
+      if (cached != null && cached.change24hPct() != null) {
+        result.put(symbol.toUpperCase(Locale.ROOT), cached.change24hPct());
+      }
+    }
+    return result;
+  }
+
+  private List<String> normalizeSymbols(Collection<String> symbols) {
+    if (symbols == null || symbols.isEmpty()) {
+      return List.of();
+    }
+    return symbols.stream()
         .filter(StringUtils::hasText)
         .map(s -> s.trim().toLowerCase(Locale.ROOT))
         .distinct()
         .toList();
-    Instant now = Instant.now();
+  }
+
+  private void fetchMissing(List<String> normalized, Instant now) {
     List<String> toFetch = new ArrayList<>();
     for (String symbol : normalized) {
       CachedPrice cached = priceCache.get(symbol);
       if (cached != null && !cached.isExpired(now, cacheTtl)) {
-        result.put(symbol.toUpperCase(Locale.ROOT), cached.price());
-      } else {
-        toFetch.add(symbol);
+        continue;
       }
+      toFetch.add(symbol);
     }
-    if (!toFetch.isEmpty()) {
-      ensureSymbolCache(now);
-      for (int i = 0; i < toFetch.size(); i += MAX_SYMBOLS_PER_REQUEST) {
-        List<String> chunk = toFetch.subList(i, Math.min(i + MAX_SYMBOLS_PER_REQUEST, toFetch.size()));
-        fetchChunk(chunk, now);
-      }
-      for (String symbol : normalized) {
-        CachedPrice cached = priceCache.get(symbol);
-        if (cached != null && cached.price() != null) {
-          result.putIfAbsent(symbol.toUpperCase(Locale.ROOT), cached.price());
-        }
-      }
+    if (toFetch.isEmpty()) {
+      return;
     }
-    return result;
+    ensureSymbolCache(now);
+    for (int i = 0; i < toFetch.size(); i += MAX_SYMBOLS_PER_REQUEST) {
+      List<String> chunk = toFetch.subList(i, Math.min(i + MAX_SYMBOLS_PER_REQUEST, toFetch.size()));
+      fetchChunk(chunk, now);
+    }
   }
 
   private void fetchChunk(List<String> symbols, Instant now) {
@@ -117,6 +145,7 @@ public class CoinGeckoClient {
           .uri(uriBuilder -> uriBuilder
               .path("/simple/price")
               .queryParam("vs_currencies", "eur")
+              .queryParam("include_24hr_change", "true")
               .queryParam("ids", String.join(",", ids))
               .build())
           .retrieve()
@@ -134,8 +163,9 @@ public class CoinGeckoClient {
           continue;
         }
         BigDecimal eur = price.get("eur");
-        if (eur != null) {
-          priceCache.put(symbol, new CachedPrice(eur, now));
+        BigDecimal change = price.get("eur_24h_change");
+        if (eur != null || change != null) {
+          priceCache.put(symbol, new CachedPrice(eur, change, now));
         }
       }
     } catch (Exception ex) {
@@ -235,7 +265,7 @@ public class CoinGeckoClient {
 
   private record SearchCoin(String id, String symbol, String name) {}
 
-  private record CachedPrice(BigDecimal price, Instant fetchedAt) {
+  private record CachedPrice(BigDecimal price, BigDecimal change24hPct, Instant fetchedAt) {
     boolean isExpired(Instant now, Duration ttl) {
       return fetchedAt.plus(ttl).isBefore(now);
     }

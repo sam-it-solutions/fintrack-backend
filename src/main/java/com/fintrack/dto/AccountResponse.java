@@ -25,4 +25,5 @@ public class AccountResponse {
   private BigDecimal currentFiatValue;
   private String fiatCurrency;
   private Instant lastSyncedAt;
+  private BigDecimal priceChange24hPct;
 }

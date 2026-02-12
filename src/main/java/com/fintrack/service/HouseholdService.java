@@ -14,6 +14,7 @@ import com.fintrack.model.User;
 import com.fintrack.repository.HouseholdMemberRepository;
 import com.fintrack.repository.HouseholdRepository;
 import com.fintrack.repository.AccountTransactionRepository;
+import com.fintrack.repository.FinancialAccountRepository;
 import com.fintrack.repository.UserRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -34,15 +35,18 @@ public class HouseholdService {
   private final HouseholdRepository householdRepository;
   private final HouseholdMemberRepository memberRepository;
   private final AccountTransactionRepository transactionRepository;
+  private final FinancialAccountRepository accountRepository;
   private final UserRepository userRepository;
 
   public HouseholdService(HouseholdRepository householdRepository,
                           HouseholdMemberRepository memberRepository,
                           AccountTransactionRepository transactionRepository,
+                          FinancialAccountRepository accountRepository,
                           UserRepository userRepository) {
     this.householdRepository = householdRepository;
     this.memberRepository = memberRepository;
     this.transactionRepository = transactionRepository;
+    this.accountRepository = accountRepository;
     this.userRepository = userRepository;
   }
 
@@ -150,6 +154,22 @@ public class HouseholdService {
     }
 
     return new HouseholdBalanceResponse(householdId, month.toString(), total, share, balances);
+  }
+
+  public void deleteHousehold(UUID userId, UUID householdId) {
+    HouseholdMember membership = memberRepository.findByUserIdAndHouseholdId(userId, householdId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Not a household member"));
+    if (membership.getRole() != HouseholdRole.OWNER) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the owner can delete a household");
+    }
+    Household household = membership.getHousehold();
+    List<com.fintrack.model.FinancialAccount> accounts = accountRepository.findByHouseholdId(householdId);
+    if (!accounts.isEmpty()) {
+      accounts.forEach(account -> account.setHousehold(null));
+      accountRepository.saveAll(accounts);
+    }
+    memberRepository.deleteByHouseholdId(householdId);
+    householdRepository.delete(household);
   }
 
   private String generateInviteCode() {

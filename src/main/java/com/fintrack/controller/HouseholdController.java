@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -57,5 +58,12 @@ public class HouseholdController {
     UUID userId = currentUserService.requireUserId();
     YearMonth parsed = YearMonth.parse(month);
     return householdService.balance(userId, householdId, parsed, includeShared);
+  }
+
+  @DeleteMapping("/{householdId}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void delete(@PathVariable UUID householdId) {
+    UUID userId = currentUserService.requireUserId();
+    householdService.deleteHousehold(userId, householdId);
   }
 }

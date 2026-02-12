@@ -19,4 +19,6 @@ public interface HouseholdMemberRepository extends JpaRepository<HouseholdMember
   Optional<HouseholdMember> findByUserIdAndHouseholdId(
       @Param("userId") UUID userId,
       @Param("householdId") UUID householdId);
+
+  void deleteByHouseholdId(UUID householdId);
 }

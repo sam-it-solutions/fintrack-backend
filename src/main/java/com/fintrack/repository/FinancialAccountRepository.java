@@ -13,6 +13,7 @@ public interface FinancialAccountRepository extends JpaRepository<FinancialAccou
   List<FinancialAccount> findByUserIdOrHouseholdIdIn(UUID userId, List<UUID> householdIds);
   List<FinancialAccount> findByConnectionId(UUID connectionId);
   Optional<FinancialAccount> findByConnectionIdAndExternalId(UUID connectionId, String externalId);
+  List<FinancialAccount> findByHouseholdId(UUID householdId);
 
   @Query("select a from FinancialAccount a " +
       "left join a.connection c " +

@@ -17,6 +17,7 @@ import com.fintrack.model.AccountType;
 import com.fintrack.model.CategoryOverride;
 import com.fintrack.model.FinancialAccount;
 import com.fintrack.model.TransactionDirection;
+import com.fintrack.provider.coingecko.CoinGeckoClient;
 import com.fintrack.repository.HouseholdMemberRepository;
 import com.fintrack.repository.AccountTransactionRepository;
 import com.fintrack.repository.CategoryOverrideRepository;
@@ -49,19 +50,22 @@ public class FinanceService {
   private final HouseholdMemberRepository householdMemberRepository;
   private final CategoryService categoryService;
   private final CategoryOverrideRepository overrideRepository;
+  private final CoinGeckoClient coinGeckoClient;
 
   public FinanceService(FinancialAccountRepository accountRepository,
                         AccountTransactionRepository transactionRepository,
                         UserRepository userRepository,
                         HouseholdMemberRepository householdMemberRepository,
                         CategoryService categoryService,
-                        CategoryOverrideRepository overrideRepository) {
+                        CategoryOverrideRepository overrideRepository,
+                        CoinGeckoClient coinGeckoClient) {
     this.accountRepository = accountRepository;
     this.transactionRepository = transactionRepository;
     this.userRepository = userRepository;
     this.householdMemberRepository = householdMemberRepository;
     this.categoryService = categoryService;
     this.overrideRepository = overrideRepository;
+    this.coinGeckoClient = coinGeckoClient;
   }
 
   public AccountResponse createAccount(UUID userId, CreateAccountRequest request) {
@@ -94,8 +98,9 @@ public class FinanceService {
     List<FinancialAccount> accounts = householdIds.isEmpty()
         ? accountRepository.findActiveByUserId(userId)
         : accountRepository.findActiveByUserIdOrHouseholdIdIn(userId, householdIds);
+    Map<String, BigDecimal> cryptoChanges = buildCryptoChangeMap(accounts);
     return accounts.stream()
-        .map(this::toAccountResponse)
+        .map(account -> toAccountResponse(account, cryptoChanges))
         .toList();
   }
 
@@ -443,6 +448,14 @@ public class FinanceService {
   }
 
   private AccountResponse toAccountResponse(FinancialAccount account) {
+    return toAccountResponse(account, null);
+  }
+
+  private AccountResponse toAccountResponse(FinancialAccount account, Map<String, BigDecimal> cryptoChanges) {
+    BigDecimal change = null;
+    if (cryptoChanges != null && account.getType() == AccountType.CRYPTO && account.getCurrency() != null) {
+      change = cryptoChanges.get(account.getCurrency().toUpperCase(Locale.ROOT));
+    }
     return new AccountResponse(
         account.getId(),
         account.getConnection() == null ? null : account.getConnection().getId(),
@@ -458,7 +471,20 @@ public class FinanceService {
         account.getOpeningBalance(),
         account.getCurrentFiatValue(),
         account.getFiatCurrency(),
-        account.getLastSyncedAt());
+        account.getLastSyncedAt(),
+        change);
+  }
+
+  private Map<String, BigDecimal> buildCryptoChangeMap(List<FinancialAccount> accounts) {
+    List<String> symbols = accounts.stream()
+        .filter(account -> account.getType() == AccountType.CRYPTO)
+        .map(FinancialAccount::getCurrency)
+        .filter(Objects::nonNull)
+        .toList();
+    if (symbols.isEmpty()) {
+      return Map.of();
+    }
+    return coinGeckoClient.getEurChangePctBySymbols(symbols);
   }
 
   private TransactionResponse toTransactionResponse(AccountTransaction tx) {
