@@ -3,6 +3,7 @@ package com.fintrack.dto;
 public class AdminSettingsRequest {
   private Boolean syncEnabled;
   private Long syncIntervalMs;
+  private Long cryptoSyncIntervalMs;
   private Boolean aiEnabled;
   private String aiModel;
 
@@ -20,6 +21,14 @@ public class AdminSettingsRequest {
 
   public void setSyncIntervalMs(Long syncIntervalMs) {
     this.syncIntervalMs = syncIntervalMs;
+  }
+
+  public Long getCryptoSyncIntervalMs() {
+    return cryptoSyncIntervalMs;
+  }
+
+  public void setCryptoSyncIntervalMs(Long cryptoSyncIntervalMs) {
+    this.cryptoSyncIntervalMs = cryptoSyncIntervalMs;
   }
 
   public Boolean getAiEnabled() {

@@ -5,6 +5,7 @@ import java.time.Instant;
 public class AdminSettingsResponse {
   private boolean syncEnabled;
   private long syncIntervalMs;
+  private long cryptoSyncIntervalMs;
   private boolean aiEnabled;
   private String aiModel;
   private Instant updatedAt;
@@ -13,11 +14,13 @@ public class AdminSettingsResponse {
 
   public AdminSettingsResponse(boolean syncEnabled,
                                long syncIntervalMs,
+                               long cryptoSyncIntervalMs,
                                boolean aiEnabled,
                                String aiModel,
                                Instant updatedAt) {
     this.syncEnabled = syncEnabled;
     this.syncIntervalMs = syncIntervalMs;
+    this.cryptoSyncIntervalMs = cryptoSyncIntervalMs;
     this.aiEnabled = aiEnabled;
     this.aiModel = aiModel;
     this.updatedAt = updatedAt;
@@ -37,6 +40,14 @@ public class AdminSettingsResponse {
 
   public void setSyncIntervalMs(long syncIntervalMs) {
     this.syncIntervalMs = syncIntervalMs;
+  }
+
+  public long getCryptoSyncIntervalMs() {
+    return cryptoSyncIntervalMs;
+  }
+
+  public void setCryptoSyncIntervalMs(long cryptoSyncIntervalMs) {
+    this.cryptoSyncIntervalMs = cryptoSyncIntervalMs;
   }
 
   public boolean isAiEnabled() {

@@ -23,6 +23,9 @@ public class AppSettings {
   @Column(name = "sync_interval_ms")
   private Long syncIntervalMs;
 
+  @Column(name = "crypto_sync_interval_ms")
+  private Long cryptoSyncIntervalMs;
+
   @Column(name = "ai_enabled")
   private Boolean aiEnabled;
 
@@ -71,6 +74,14 @@ public class AppSettings {
 
   public void setSyncIntervalMs(Long syncIntervalMs) {
     this.syncIntervalMs = syncIntervalMs;
+  }
+
+  public Long getCryptoSyncIntervalMs() {
+    return cryptoSyncIntervalMs;
+  }
+
+  public void setCryptoSyncIntervalMs(Long cryptoSyncIntervalMs) {
+    this.cryptoSyncIntervalMs = cryptoSyncIntervalMs;
   }
 
   public Boolean getAiEnabled() {

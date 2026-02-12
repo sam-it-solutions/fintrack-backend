@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 public class AppSettingsService {
   private static final long MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000L;
   private static final long MAX_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000L;
+  private static final long MIN_CRYPTO_SYNC_INTERVAL_MS = 60 * 1000L;
+  private static final long MAX_CRYPTO_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000L;
 
   private final AppSettingsRepository repository;
   private final SyncProperties syncProperties;
@@ -40,6 +42,11 @@ public class AppSettingsService {
       long normalized = Math.max(MIN_SYNC_INTERVAL_MS, Math.min(MAX_SYNC_INTERVAL_MS, request.getSyncIntervalMs()));
       settings.setSyncIntervalMs(normalized);
     }
+    if (request.getCryptoSyncIntervalMs() != null) {
+      long normalized = Math.max(MIN_CRYPTO_SYNC_INTERVAL_MS,
+          Math.min(MAX_CRYPTO_SYNC_INTERVAL_MS, request.getCryptoSyncIntervalMs()));
+      settings.setCryptoSyncIntervalMs(normalized);
+    }
     if (request.getAiEnabled() != null) {
       settings.setAiEnabled(request.getAiEnabled());
     }
@@ -65,6 +72,11 @@ public class AppSettingsService {
 
   public long getCryptoSyncIntervalMs() {
     long baseInterval = getSyncIntervalMs();
+    AppSettings settings = getOrCreate();
+    Long override = settings.getCryptoSyncIntervalMs();
+    if (override != null && override > 0) {
+      return override;
+    }
     long cryptoDefault = syncProperties.cryptoIntervalMs();
     if (cryptoDefault <= 0) {
       return baseInterval;
@@ -107,11 +119,18 @@ public class AppSettingsService {
     long syncIntervalMs = settings.getSyncIntervalMs() != null
         ? settings.getSyncIntervalMs()
         : syncProperties.intervalMs();
+    long cryptoSyncIntervalMs;
+    if (settings.getCryptoSyncIntervalMs() != null) {
+      cryptoSyncIntervalMs = settings.getCryptoSyncIntervalMs();
+    } else {
+      long cryptoDefault = syncProperties.cryptoIntervalMs();
+      cryptoSyncIntervalMs = cryptoDefault <= 0 ? syncIntervalMs : Math.min(syncIntervalMs, cryptoDefault);
+    }
     boolean aiEnabled = settings.getAiEnabled() != null
         ? settings.getAiEnabled()
         : Boolean.TRUE.equals(openAiProperties.enabled());
     String aiModel = settings.getAiModel() != null ? settings.getAiModel() : openAiProperties.model();
 
-    return new AdminSettingsResponse(syncEnabled, syncIntervalMs, aiEnabled, aiModel, settings.getUpdatedAt());
+    return new AdminSettingsResponse(syncEnabled, syncIntervalMs, cryptoSyncIntervalMs, aiEnabled, aiModel, settings.getUpdatedAt());
   }
 }
