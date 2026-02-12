@@ -48,6 +48,7 @@ com/fintrack/config/JwtProperties.class
 com/fintrack/dto/RuleRequest.class
 com/fintrack/config/PasskeyProperties.class
 com/fintrack/model/Connection.class
+com/fintrack/service/AppSettingsService.class
 com/fintrack/dto/HouseholdBalanceMember.class
 com/fintrack/config/SyncProperties.class
 com/fintrack/service/CurrentUserService.class
@@ -74,7 +75,9 @@ com/fintrack/dto/CreateTransactionRequest.class
 com/fintrack/dto/UpdateAccountRequest.class
 com/fintrack/config/JwtAuthFilter.class
 com/fintrack/controller/RuleController.class
+com/fintrack/model/AppSettings.class
 com/fintrack/repository/FinancialAccountRepository.class
+com/fintrack/dto/AdminSettingsResponse.class
 com/fintrack/dto/PasskeyFinishRequest.class
 com/fintrack/provider/ConnectResult.class
 com/fintrack/dto/ConnectionResponse.class
@@ -105,6 +108,7 @@ com/fintrack/model/CategoryOverride$MatchMode.class
 com/fintrack/model/AccountTransaction.class
 com/fintrack/config/EnableBankingProperties.class
 com/fintrack/dto/EnableBankingAspspResponse.class
+com/fintrack/repository/AppSettingsRepository.class
 com/fintrack/provider/tink/TinkClient.class
 com/fintrack/provider/enablebanking/EnableBankingClient.class
 com/fintrack/provider/coingecko/CoinGeckoClient$2.class
@@ -123,11 +127,13 @@ com/fintrack/service/TinkService$1.class
 com/fintrack/service/ConnectionService$1.class
 com/fintrack/dto/AccountShareRequest.class
 com/fintrack/dto/SummaryResponse.class
+com/fintrack/controller/AdminSettingsController.class
 com/fintrack/config/AsyncConfig.class
 com/fintrack/service/CategoryService$CachedAccounts.class
 com/fintrack/provider/coingecko/CoinGeckoClient$CoinListItem.class
 com/fintrack/service/CategoryService$CategoryResult.class
 com/fintrack/service/NoopNotificationService.class
+com/fintrack/dto/AdminSettingsRequest.class
 com/fintrack/repository/AccountTransactionRepository.class
 com/fintrack/repository/PasskeyCredentialRepository.class
 com/fintrack/controller/PasskeyController.class

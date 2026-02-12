@@ -32,6 +32,7 @@ public class SyncScheduler {
     long intervalMs = appSettingsService.getSyncIntervalMs();
     long cryptoIntervalMs = appSettingsService.getCryptoSyncIntervalMs();
     connectionRepository.findByAutoSyncEnabledTrueAndStatus(ConnectionStatus.ACTIVE)
+        .stream()
         .filter(connection -> shouldSync(connection, now, intervalMs, cryptoIntervalMs))
         .forEach(connectionService::syncConnection);
   }
