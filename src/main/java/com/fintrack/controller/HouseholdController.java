@@ -66,4 +66,11 @@ public class HouseholdController {
     UUID userId = currentUserService.requireUserId();
     householdService.deleteHousehold(userId, householdId);
   }
+
+  @DeleteMapping("/{householdId}/members/{memberId}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void removeMember(@PathVariable UUID householdId, @PathVariable UUID memberId) {
+    UUID userId = currentUserService.requireUserId();
+    householdService.removeMember(userId, householdId, memberId);
+  }
 }

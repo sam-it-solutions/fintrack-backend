@@ -172,6 +172,38 @@ public class HouseholdService {
     householdRepository.delete(household);
   }
 
+  public void removeMember(UUID userId, UUID householdId, UUID memberId) {
+    HouseholdMember requester = memberRepository.findByUserIdAndHouseholdId(userId, householdId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Not a household member"));
+
+    if (!userId.equals(memberId) && requester.getRole() != HouseholdRole.OWNER) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the owner can remove members");
+    }
+
+    HouseholdMember target = memberRepository.findByUserIdAndHouseholdId(memberId, householdId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Member not found"));
+
+    if (target.getRole() == HouseholdRole.OWNER) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Owner cannot be removed");
+    }
+
+    List<com.fintrack.model.FinancialAccount> accounts = accountRepository.findByHouseholdId(householdId);
+    if (!accounts.isEmpty()) {
+      List<com.fintrack.model.FinancialAccount> toUpdate = new ArrayList<>();
+      for (var account : accounts) {
+        if (account.getUser() != null && account.getUser().getId().equals(memberId)) {
+          account.setHousehold(null);
+          toUpdate.add(account);
+        }
+      }
+      if (!toUpdate.isEmpty()) {
+        accountRepository.saveAll(toUpdate);
+      }
+    }
+
+    memberRepository.delete(target);
+  }
+
   private String generateInviteCode() {
     return UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
   }
