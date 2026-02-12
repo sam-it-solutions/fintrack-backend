@@ -63,6 +63,15 @@ public class AppSettingsService {
     return interval != null ? interval : syncProperties.intervalMs();
   }
 
+  public long getCryptoSyncIntervalMs() {
+    long baseInterval = getSyncIntervalMs();
+    long cryptoDefault = syncProperties.cryptoIntervalMs();
+    if (cryptoDefault <= 0) {
+      return baseInterval;
+    }
+    return Math.min(baseInterval, cryptoDefault);
+  }
+
   public boolean isAiEnabled() {
     AppSettings settings = getOrCreate();
     Boolean enabled = settings.getAiEnabled();

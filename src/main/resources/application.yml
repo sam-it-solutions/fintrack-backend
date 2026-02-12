@@ -54,6 +54,7 @@ fintrack:
   sync:
     enabled: true
     interval-ms: 21600000
+    crypto-interval-ms: 3600000
     poll-ms: 60000
   mail:
     enabled: false

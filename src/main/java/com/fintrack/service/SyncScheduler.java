@@ -1,6 +1,8 @@
 package com.fintrack.service;
 
 import com.fintrack.model.ConnectionStatus;
+import com.fintrack.model.ConnectionType;
+import com.fintrack.model.SyncStatus;
 import com.fintrack.repository.ConnectionRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -12,7 +14,6 @@ public class SyncScheduler {
   private final ConnectionRepository connectionRepository;
   private final ConnectionService connectionService;
   private final AppSettingsService appSettingsService;
-  private Instant lastRunAt;
 
   public SyncScheduler(ConnectionRepository connectionRepository,
                        ConnectionService connectionService,
@@ -27,13 +28,34 @@ public class SyncScheduler {
     if (!appSettingsService.isSyncEnabled()) {
       return;
     }
-    long intervalMs = appSettingsService.getSyncIntervalMs();
     Instant now = Instant.now();
-    if (lastRunAt != null && Duration.between(lastRunAt, now).toMillis() < intervalMs) {
-      return;
-    }
-    lastRunAt = now;
+    long intervalMs = appSettingsService.getSyncIntervalMs();
+    long cryptoIntervalMs = appSettingsService.getCryptoSyncIntervalMs();
     connectionRepository.findByAutoSyncEnabledTrueAndStatus(ConnectionStatus.ACTIVE)
+        .filter(connection -> shouldSync(connection, now, intervalMs, cryptoIntervalMs))
         .forEach(connectionService::syncConnection);
+  }
+
+  private boolean shouldSync(com.fintrack.model.Connection connection,
+                             Instant now,
+                             long intervalMs,
+                             long cryptoIntervalMs) {
+    if (connection.getSyncStatus() == SyncStatus.RUNNING) {
+      return false;
+    }
+    long effectiveInterval = connection.getType() == ConnectionType.CRYPTO
+        ? cryptoIntervalMs
+        : intervalMs;
+    if (effectiveInterval <= 0) {
+      return true;
+    }
+    Instant lastSync = connection.getLastSyncCompletedAt();
+    if (lastSync == null) {
+      lastSync = connection.getLastSyncedAt();
+    }
+    if (lastSync == null) {
+      return true;
+    }
+    return Duration.between(lastSync, now).toMillis() >= effectiveInterval;
   }
 }
