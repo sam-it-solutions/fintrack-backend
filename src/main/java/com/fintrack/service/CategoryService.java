@@ -98,6 +98,19 @@ public class CategoryService {
                                            String currency,
                                            String amount,
                                            String counterpartyIban) {
+    return categorizeDetailed(userId, description, merchant, direction, transactionType, accountType, currency, amount, counterpartyIban, true);
+  }
+
+  public CategoryResult categorizeDetailed(UUID userId,
+                                           String description,
+                                           String merchant,
+                                           TransactionDirection direction,
+                                           String transactionType,
+                                           AccountType accountType,
+                                           String currency,
+                                           String amount,
+                                           String counterpartyIban,
+                                           boolean allowAi) {
     if (accountType == AccountType.CRYPTO) {
       return new CategoryResult("Crypto", "rule", 0.95, "Crypto account");
     }
@@ -131,13 +144,15 @@ public class CategoryService {
     }
 
     List<String> categories = allowedCategories(userId);
-    String ai = openAiClient.classify(
-        buildSystemPrompt(categories),
-        buildUserPrompt(description, merchant, direction, transactionType, currency, amount, counterpartyIban),
-        categories
-    );
-    if (ai != null) {
-      return new CategoryResult(ai, "ai", 0.72, "AI classificatie op basis van omschrijving");
+    if (allowAi) {
+      String ai = openAiClient.classify(
+          buildSystemPrompt(categories),
+          buildUserPrompt(description, merchant, direction, transactionType, currency, amount, counterpartyIban),
+          categories
+      );
+      if (ai != null) {
+        return new CategoryResult(ai, "ai", 0.72, "AI classificatie op basis van omschrijving");
+      }
     }
 
     double confidence = "Geen match".equalsIgnoreCase(match.reason()) ? 0.4 : 0.6;

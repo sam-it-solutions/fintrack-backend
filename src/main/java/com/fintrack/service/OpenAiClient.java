@@ -21,11 +21,18 @@ import org.springframework.web.client.RestClientResponseException;
 public class OpenAiClient {
   private static final Logger log = LoggerFactory.getLogger(OpenAiClient.class);
   private static final Pattern CATEGORY_PATTERN = Pattern.compile("\\\"category\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
+  private static final Pattern RETRY_DELAY_PATTERN = Pattern.compile("\\\"retryDelay\\\"\\s*:\\s*\\\"(\\d+)(?:\\.\\d+)?s\\\"");
+  private static final Duration MIN_REQUEST_SPACING = Duration.ofSeconds(2);
+  private static final Duration QUOTA_COOLDOWN = Duration.ofHours(24);
+  private static final Duration DEFAULT_RATE_LIMIT_COOLDOWN = Duration.ofMinutes(15);
+  private static final Duration DEFAULT_QUOTA_COOLDOWN = Duration.ofMinutes(10);
 
   private final GeminiProperties properties;
   private final ObjectMapper objectMapper;
   private final RestClient restClient;
   private final AppSettingsService appSettingsService;
+  private final Object requestLock = new Object();
+  private volatile long nextAllowedRequestAtMs = 0L;
 
   public OpenAiClient(GeminiProperties properties, ObjectMapper objectMapper, AppSettingsService appSettingsService) {
     this.properties = properties;
@@ -59,6 +66,7 @@ public class OpenAiClient {
     String model = resolveModel();
 
     try {
+      throttleRequests();
       JsonNode response = restClient.post()
           .uri(uriBuilder -> uriBuilder
               .path("/v1beta/models/{model}:generateContent")
@@ -141,15 +149,10 @@ public class OpenAiClient {
     String body = ex.getResponseBodyAsString();
     String message = (body == null ? "" : body).toLowerCase(Locale.ROOT);
 
-    if (status == 429 && (message.contains("insufficient_quota") || message.contains("quota")
-        || message.contains("resource_exhausted"))) {
-      appSettingsService.recordAiFailure(body, Duration.ofHours(24));
-      log.warn("Gemini categorization paused for 24h due to quota: {}", body);
-      return;
-    }
     if (status == 429) {
-      appSettingsService.recordAiFailure(body, Duration.ofMinutes(15));
-      log.warn("Gemini categorization paused for 15m due to rate limit: {}", body);
+      Duration cooldown = determine429Cooldown(message, body);
+      appSettingsService.recordAiFailure(body, cooldown);
+      log.warn("Gemini categorization paused for {}s due to 429", cooldown.toSeconds());
       return;
     }
     log.warn("Gemini categorization failed ({}): {}", status, body);
@@ -159,13 +162,13 @@ public class OpenAiClient {
     String message = ex.getMessage() == null ? "" : ex.getMessage();
     String lower = message.toLowerCase(Locale.ROOT);
     if (lower.contains("insufficient_quota") || lower.contains("resource_exhausted") || lower.contains("quota")) {
-      appSettingsService.recordAiFailure(message, Duration.ofHours(24));
-      log.warn("Gemini categorization paused for 24h due to quota: {}", message);
+      appSettingsService.recordAiFailure(message, DEFAULT_QUOTA_COOLDOWN);
+      log.warn("Gemini categorization paused for {}s due to quota", DEFAULT_QUOTA_COOLDOWN.toSeconds());
       return;
     }
     if (lower.contains("rate limit") || lower.contains("too many requests") || lower.contains("rate_limit")) {
-      appSettingsService.recordAiFailure(message, Duration.ofMinutes(15));
-      log.warn("Gemini categorization paused for 15m due to rate limit: {}", message);
+      appSettingsService.recordAiFailure(message, DEFAULT_RATE_LIMIT_COOLDOWN);
+      log.warn("Gemini categorization paused for {}s due to rate limit", DEFAULT_RATE_LIMIT_COOLDOWN.toSeconds());
       return;
     }
     log.warn("Gemini categorization failed: {}", message);
@@ -217,5 +220,62 @@ public class OpenAiClient {
       }
     }
     return null;
+  }
+
+  private void throttleRequests() {
+    synchronized (requestLock) {
+      long now = System.currentTimeMillis();
+      long waitMs = nextAllowedRequestAtMs - now;
+      if (waitMs > 0) {
+        try {
+          Thread.sleep(waitMs);
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+        }
+      }
+      nextAllowedRequestAtMs = System.currentTimeMillis() + MIN_REQUEST_SPACING.toMillis();
+    }
+  }
+
+  private Duration determine429Cooldown(String lowerMessage, String rawBody) {
+    if (containsDailyQuotaSignal(lowerMessage)) {
+      return QUOTA_COOLDOWN;
+    }
+    Duration retryDelay = extractRetryDelay(rawBody);
+    if (!retryDelay.isZero()) {
+      Duration buffered = retryDelay.plusSeconds(5);
+      return buffered.compareTo(DEFAULT_QUOTA_COOLDOWN) > 0 ? buffered : DEFAULT_QUOTA_COOLDOWN;
+    }
+    if (lowerMessage.contains("insufficient_quota")
+        || lowerMessage.contains("resource_exhausted")
+        || lowerMessage.contains("quota")) {
+      return DEFAULT_QUOTA_COOLDOWN;
+    }
+    return DEFAULT_RATE_LIMIT_COOLDOWN;
+  }
+
+  private boolean containsDailyQuotaSignal(String lowerMessage) {
+    return lowerMessage.contains("perday")
+        || lowerMessage.contains("requestsperday")
+        || lowerMessage.contains("inputtokenspermodelperday");
+  }
+
+  private Duration extractRetryDelay(String rawBody) {
+    if (rawBody == null || rawBody.isBlank()) {
+      return Duration.ZERO;
+    }
+    Matcher matcher = RETRY_DELAY_PATTERN.matcher(rawBody);
+    if (!matcher.find()) {
+      return Duration.ZERO;
+    }
+    try {
+      long seconds = Long.parseLong(matcher.group(1));
+      if (seconds <= 0) {
+        return Duration.ZERO;
+      }
+      return Duration.ofSeconds(seconds);
+    } catch (Exception ignored) {
+      return Duration.ZERO;
+    }
   }
 }

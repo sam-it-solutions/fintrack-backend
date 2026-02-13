@@ -45,6 +45,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class FinanceService {
+  private static final int MAX_AI_REQUESTS_PER_RELABEL_RUN = 30;
+
   private final FinancialAccountRepository accountRepository;
   private final AccountTransactionRepository transactionRepository;
   private final UserRepository userRepository;
@@ -363,6 +365,7 @@ public class FinanceService {
     int updated = 0;
     int aiCount = 0;
     for (AccountTransaction tx : txs) {
+      boolean allowAi = aiCount < MAX_AI_REQUESTS_PER_RELABEL_RUN;
       CategoryService.CategoryResult categoryResult = categoryService.categorizeDetailed(
           userId,
           tx.getDescription(),
@@ -372,10 +375,18 @@ public class FinanceService {
           tx.getAccount().getType(),
           tx.getCurrency(),
           tx.getAmount() == null ? null : tx.getAmount().toPlainString(),
-          tx.getCounterpartyIban());
+          tx.getCounterpartyIban(),
+          allowAi);
       if (categoryResult.category() != null) {
         if ("ai".equalsIgnoreCase(categoryResult.source())) {
           aiCount++;
+        }
+        // Keep existing explicit category when AI budget is exhausted and rule fallback has no match.
+        if (!allowAi
+            && "Overig".equalsIgnoreCase(categoryResult.category())
+            && tx.getCategory() != null
+            && !tx.getCategory().isBlank()) {
+          continue;
         }
         boolean changed = !java.util.Objects.equals(tx.getCategory(), categoryResult.category())
             || !java.util.Objects.equals(tx.getCategorySource(), categoryResult.source())
