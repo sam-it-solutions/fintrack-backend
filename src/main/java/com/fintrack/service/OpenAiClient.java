@@ -3,6 +3,7 @@ package com.fintrack.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fintrack.config.OpenAiProperties;
+import com.fintrack.dto.AiKeyTestResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +15,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 @Component
 public class OpenAiClient {
@@ -77,6 +79,25 @@ public class OpenAiClient {
     }
   }
 
+  public AiKeyTestResponse testApiKey() {
+    if (properties.apiKey() == null || properties.apiKey().isBlank()) {
+      return new AiKeyTestResponse(false, "missing_key", "OpenAI API key ontbreekt.");
+    }
+    try {
+      restClient.get()
+          .uri("/v1/models")
+          .header(HttpHeaders.AUTHORIZATION, "Bearer " + properties.apiKey())
+          .accept(MediaType.APPLICATION_JSON)
+          .retrieve()
+          .body(JsonNode.class);
+      return new AiKeyTestResponse(true, "ok", "API key is geldig.");
+    } catch (RestClientResponseException ex) {
+      return mapTestError(ex.getStatusCode().value(), ex.getResponseBodyAsString());
+    } catch (Exception ex) {
+      return new AiKeyTestResponse(false, "error", "Kon OpenAI niet bereiken.");
+    }
+  }
+
   private void handleAiFailure(Exception ex) {
     String message = ex.getMessage() == null ? "" : ex.getMessage();
     String lower = message.toLowerCase();
@@ -91,6 +112,23 @@ public class OpenAiClient {
       return;
     }
     log.warn("OpenAI categorization failed: {}", message);
+  }
+
+  private AiKeyTestResponse mapTestError(int statusCode, String body) {
+    String lower = body == null ? "" : body.toLowerCase();
+    if (statusCode == 401 || lower.contains("invalid_api_key") || lower.contains("invalid api key")) {
+      return new AiKeyTestResponse(false, "invalid_key", "Ongeldige OpenAI API key.");
+    }
+    if (statusCode == 429 && lower.contains("insufficient_quota")) {
+      return new AiKeyTestResponse(false, "quota", "OpenAI quota is opgebruikt.");
+    }
+    if (statusCode == 429) {
+      return new AiKeyTestResponse(false, "rate_limit", "Te veel aanvragen naar OpenAI.");
+    }
+    if (statusCode == 403) {
+      return new AiKeyTestResponse(false, "forbidden", "Geen toegang tot OpenAI.");
+    }
+    return new AiKeyTestResponse(false, "error", "OpenAI fout (" + statusCode + ").");
   }
 
   private String extractCategory(String content, List<String> allowedCategories) {
