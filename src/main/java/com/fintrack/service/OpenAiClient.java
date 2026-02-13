@@ -3,6 +3,7 @@ package com.fintrack.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fintrack.config.OpenAiProperties;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -35,7 +36,7 @@ public class OpenAiClient {
   }
 
   public String classify(String systemPrompt, String userPrompt, List<String> allowedCategories) {
-    if (!appSettingsService.isAiEnabled()) {
+    if (!appSettingsService.isAiAvailable()) {
       return null;
     }
     if (properties.apiKey() == null || properties.apiKey().isBlank()) {
@@ -71,9 +72,25 @@ public class OpenAiClient {
           : response.path("choices").path(0).path("message").path("content").asText(null);
       return extractCategory(content, allowedCategories);
     } catch (Exception ex) {
-      log.warn("OpenAI categorization failed: {}", ex.getMessage());
+      handleAiFailure(ex);
       return null;
     }
+  }
+
+  private void handleAiFailure(Exception ex) {
+    String message = ex.getMessage() == null ? "" : ex.getMessage();
+    String lower = message.toLowerCase();
+    if (lower.contains("insufficient_quota") || lower.contains("exceeded your current quota")) {
+      appSettingsService.recordAiFailure(message, Duration.ofHours(24));
+      log.warn("OpenAI categorization paused for 24h due to quota: {}", message);
+      return;
+    }
+    if (lower.contains("rate limit") || lower.contains("too many requests") || lower.contains("rate_limit")) {
+      appSettingsService.recordAiFailure(message, Duration.ofMinutes(15));
+      log.warn("OpenAI categorization paused for 15m due to rate limit: {}", message);
+      return;
+    }
+    log.warn("OpenAI categorization failed: {}", message);
   }
 
   private String extractCategory(String content, List<String> allowedCategories) {

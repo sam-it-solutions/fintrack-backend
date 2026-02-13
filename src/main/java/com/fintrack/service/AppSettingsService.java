@@ -6,6 +6,8 @@ import com.fintrack.dto.AdminSettingsRequest;
 import com.fintrack.dto.AdminSettingsResponse;
 import com.fintrack.model.AppSettings;
 import com.fintrack.repository.AppSettingsRepository;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 
@@ -49,6 +51,11 @@ public class AppSettingsService {
     }
     if (request.getAiEnabled() != null) {
       settings.setAiEnabled(request.getAiEnabled());
+      if (Boolean.TRUE.equals(request.getAiEnabled())) {
+        settings.setAiDisabledUntil(null);
+        settings.setAiLastError(null);
+        settings.setAiLastErrorAt(null);
+      }
     }
     if (request.getAiModel() != null) {
       String model = request.getAiModel().trim();
@@ -88,6 +95,33 @@ public class AppSettingsService {
     AppSettings settings = getOrCreate();
     Boolean enabled = settings.getAiEnabled();
     return enabled != null ? enabled : Boolean.TRUE.equals(openAiProperties.enabled());
+  }
+
+  public boolean isAiAvailable() {
+    if (!isAiEnabled()) {
+      return false;
+    }
+    AppSettings settings = getOrCreate();
+    Instant disabledUntil = settings.getAiDisabledUntil();
+    return disabledUntil == null || disabledUntil.isBefore(Instant.now());
+  }
+
+  public void recordAiFailure(String message, Duration cooldown) {
+    if (cooldown == null || cooldown.isNegative() || cooldown.isZero()) {
+      return;
+    }
+    AppSettings settings = getOrCreate();
+    Instant now = Instant.now();
+    Instant nextDisabledUntil = now.plus(cooldown);
+    Instant currentDisabledUntil = settings.getAiDisabledUntil();
+    if (currentDisabledUntil == null || currentDisabledUntil.isBefore(nextDisabledUntil)) {
+      settings.setAiDisabledUntil(nextDisabledUntil);
+    }
+    if (message != null && !message.isBlank()) {
+      settings.setAiLastError(message);
+      settings.setAiLastErrorAt(now);
+    }
+    repository.save(settings);
   }
 
   public String getAiModel() {
@@ -130,7 +164,16 @@ public class AppSettingsService {
         ? settings.getAiEnabled()
         : Boolean.TRUE.equals(openAiProperties.enabled());
     String aiModel = settings.getAiModel() != null ? settings.getAiModel() : openAiProperties.model();
-
-    return new AdminSettingsResponse(syncEnabled, syncIntervalMs, cryptoSyncIntervalMs, aiEnabled, aiModel, settings.getUpdatedAt());
+    return new AdminSettingsResponse(
+        syncEnabled,
+        syncIntervalMs,
+        cryptoSyncIntervalMs,
+        aiEnabled,
+        aiModel,
+        settings.getAiDisabledUntil(),
+        settings.getAiLastError(),
+        settings.getAiLastErrorAt(),
+        settings.getUpdatedAt()
+    );
   }
 }

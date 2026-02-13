@@ -32,6 +32,15 @@ public class AppSettings {
   @Column(name = "ai_model")
   private String aiModel;
 
+  @Column(name = "ai_disabled_until")
+  private Instant aiDisabledUntil;
+
+  @Column(name = "ai_last_error")
+  private String aiLastError;
+
+  @Column(name = "ai_last_error_at")
+  private Instant aiLastErrorAt;
+
   @Column(name = "created_at")
   private Instant createdAt;
 
@@ -98,6 +107,30 @@ public class AppSettings {
 
   public void setAiModel(String aiModel) {
     this.aiModel = aiModel;
+  }
+
+  public Instant getAiDisabledUntil() {
+    return aiDisabledUntil;
+  }
+
+  public void setAiDisabledUntil(Instant aiDisabledUntil) {
+    this.aiDisabledUntil = aiDisabledUntil;
+  }
+
+  public String getAiLastError() {
+    return aiLastError;
+  }
+
+  public void setAiLastError(String aiLastError) {
+    this.aiLastError = aiLastError;
+  }
+
+  public Instant getAiLastErrorAt() {
+    return aiLastErrorAt;
+  }
+
+  public void setAiLastErrorAt(Instant aiLastErrorAt) {
+    this.aiLastErrorAt = aiLastErrorAt;
   }
 
   public Instant getCreatedAt() {

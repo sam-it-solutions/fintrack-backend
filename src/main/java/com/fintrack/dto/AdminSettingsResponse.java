@@ -8,6 +8,9 @@ public class AdminSettingsResponse {
   private long cryptoSyncIntervalMs;
   private boolean aiEnabled;
   private String aiModel;
+  private java.time.Instant aiDisabledUntil;
+  private String aiLastError;
+  private java.time.Instant aiLastErrorAt;
   private Instant updatedAt;
 
   public AdminSettingsResponse() {}
@@ -17,12 +20,18 @@ public class AdminSettingsResponse {
                                long cryptoSyncIntervalMs,
                                boolean aiEnabled,
                                String aiModel,
+                               java.time.Instant aiDisabledUntil,
+                               String aiLastError,
+                               java.time.Instant aiLastErrorAt,
                                Instant updatedAt) {
     this.syncEnabled = syncEnabled;
     this.syncIntervalMs = syncIntervalMs;
     this.cryptoSyncIntervalMs = cryptoSyncIntervalMs;
     this.aiEnabled = aiEnabled;
     this.aiModel = aiModel;
+    this.aiDisabledUntil = aiDisabledUntil;
+    this.aiLastError = aiLastError;
+    this.aiLastErrorAt = aiLastErrorAt;
     this.updatedAt = updatedAt;
   }
 
@@ -64,6 +73,30 @@ public class AdminSettingsResponse {
 
   public void setAiModel(String aiModel) {
     this.aiModel = aiModel;
+  }
+
+  public java.time.Instant getAiDisabledUntil() {
+    return aiDisabledUntil;
+  }
+
+  public void setAiDisabledUntil(java.time.Instant aiDisabledUntil) {
+    this.aiDisabledUntil = aiDisabledUntil;
+  }
+
+  public String getAiLastError() {
+    return aiLastError;
+  }
+
+  public void setAiLastError(String aiLastError) {
+    this.aiLastError = aiLastError;
+  }
+
+  public java.time.Instant getAiLastErrorAt() {
+    return aiLastErrorAt;
+  }
+
+  public void setAiLastErrorAt(java.time.Instant aiLastErrorAt) {
+    this.aiLastErrorAt = aiLastErrorAt;
   }
 
   public Instant getUpdatedAt() {
