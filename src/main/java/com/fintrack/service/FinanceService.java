@@ -38,6 +38,7 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -360,6 +361,7 @@ public class FinanceService {
         : transactionRepository.findUserAndHouseholdTransactions(userId, householdIds);
 
     int updated = 0;
+    int aiCount = 0;
     for (AccountTransaction tx : txs) {
       CategoryService.CategoryResult categoryResult = categoryService.categorizeDetailed(
           userId,
@@ -372,6 +374,9 @@ public class FinanceService {
           tx.getAmount() == null ? null : tx.getAmount().toPlainString(),
           tx.getCounterpartyIban());
       if (categoryResult.category() != null) {
+        if ("ai".equalsIgnoreCase(categoryResult.source())) {
+          aiCount++;
+        }
         boolean changed = !java.util.Objects.equals(tx.getCategory(), categoryResult.category())
             || !java.util.Objects.equals(tx.getCategorySource(), categoryResult.source())
             || !java.util.Objects.equals(tx.getCategoryReason(), categoryResult.reason())
@@ -391,7 +396,16 @@ public class FinanceService {
     if (!txs.isEmpty()) {
       transactionRepository.saveAll(txs);
     }
-    return new RecategorizeResponse(updated, txs.size());
+    return new RecategorizeResponse(updated, txs.size(), aiCount);
+  }
+
+  public List<TransactionResponse> listAiTransactions(UUID userId, int limit) {
+    int safeLimit = Math.max(1, Math.min(limit, 200));
+    List<UUID> householdIds = householdIdsForUser(userId);
+    List<AccountTransaction> txs = householdIds.isEmpty()
+        ? transactionRepository.findUserAiTransactions(userId, PageRequest.of(0, safeLimit))
+        : transactionRepository.findUserAndHouseholdAiTransactions(userId, householdIds, PageRequest.of(0, safeLimit));
+    return txs.stream().map(this::toTransactionResponse).toList();
   }
 
   public void requestSync(UUID userId, UUID accountId) {

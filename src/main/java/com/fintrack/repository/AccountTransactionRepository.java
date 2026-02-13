@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.repository.query.Param;
 
 public interface AccountTransactionRepository extends JpaRepository<AccountTransaction, UUID> {
@@ -41,6 +42,25 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
   List<AccountTransaction> findUserAndHouseholdTransactions(
       @Param("userId") UUID userId,
       @Param("householdIds") List<UUID> householdIds);
+
+  @Query("select t from AccountTransaction t " +
+      "where t.account.user.id = :userId " +
+      "and (t.account.connection is null or t.account.connection.status <> com.fintrack.model.ConnectionStatus.DISABLED) " +
+      "and lower(coalesce(t.categorySource, '')) = 'ai' " +
+      "order by t.bookingDate desc, t.createdAt desc")
+  List<AccountTransaction> findUserAiTransactions(
+      @Param("userId") UUID userId,
+      Pageable pageable);
+
+  @Query("select t from AccountTransaction t " +
+      "where (t.account.user.id = :userId or t.account.household.id in :householdIds) " +
+      "and (t.account.connection is null or t.account.connection.status <> com.fintrack.model.ConnectionStatus.DISABLED) " +
+      "and lower(coalesce(t.categorySource, '')) = 'ai' " +
+      "order by t.bookingDate desc, t.createdAt desc")
+  List<AccountTransaction> findUserAndHouseholdAiTransactions(
+      @Param("userId") UUID userId,
+      @Param("householdIds") List<UUID> householdIds,
+      Pageable pageable);
 
   @Query("select t from AccountTransaction t " +
       "where t.account.user.id = :userId " +

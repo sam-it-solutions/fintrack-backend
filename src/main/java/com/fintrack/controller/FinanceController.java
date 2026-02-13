@@ -126,4 +126,11 @@ public class FinanceController {
     UUID userId = currentUserService.requireUserId();
     return financeService.recategorizeAll(userId);
   }
+
+  @GetMapping("/transactions/ai")
+  public List<TransactionResponse> listAiTransactions(
+      @RequestParam(value = "limit", defaultValue = "50") int limit) {
+    UUID userId = currentUserService.requireUserId();
+    return financeService.listAiTransactions(userId, limit);
+  }
 }
