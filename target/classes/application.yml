@@ -34,10 +34,15 @@ spring:
 fintrack:
   ai:
     openai:
-      enabled: true
+      enabled: false
       api-key: ${OPENAI_API_KEY:}
       base-url: https://api.openai.com
       model: gpt-4.1-mini
+    gemini:
+      enabled: true
+      api-key: ${GEMINI_API_KEY:}
+      base-url: https://generativelanguage.googleapis.com
+      model: gemini-2.0-flash
   app:
     frontend-url: ${FRONTEND_URL:http://localhost:4200}
     backend-url: ${BACKEND_URL:http://localhost:8085}
@@ -99,4 +104,3 @@ fintrack:
 logging:
   level:
     com.fintrack.provider.bitvavo: INFO
- 

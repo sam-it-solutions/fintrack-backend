@@ -3,9 +3,11 @@
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/config/PasskeyConfig.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/AuthResponse.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/ProviderField.java
+/Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/config/GeminiProperties.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/AdminSettingsRequest.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/repository/HouseholdRepository.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/config/CorsConfig.java
+/Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/controller/AdminAiController.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/SyncStatus.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/PasskeyChallenge.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/repository/RefreshTokenRepository.java
@@ -78,6 +80,7 @@
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/AccountResponse.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/SpendingCategorySummary.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/config/PasskeyProperties.java
+/Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/AiKeyTestResponse.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/SummaryResponse.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/AuthRequest.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/CreateConnectionRequest.java

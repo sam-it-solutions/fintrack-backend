@@ -128,6 +128,8 @@ com/fintrack/dto/CreateAccountRequest.class
 com/fintrack/service/CategoryService.class
 com/fintrack/service/EnableBankingService$1.class
 com/fintrack/service/TinkService$1.class
+com/fintrack/config/GeminiProperties.class
+com/fintrack/dto/AiKeyTestResponse.class
 com/fintrack/service/ConnectionService$1.class
 com/fintrack/dto/AccountShareRequest.class
 com/fintrack/dto/SummaryResponse.class
@@ -139,6 +141,7 @@ com/fintrack/service/RefreshTokenService$TokenResult.class
 com/fintrack/service/CategoryService$CategoryResult.class
 com/fintrack/service/NoopNotificationService.class
 com/fintrack/dto/AdminSettingsRequest.class
+com/fintrack/controller/AdminAiController.class
 com/fintrack/repository/AccountTransactionRepository.class
 com/fintrack/repository/PasskeyCredentialRepository.class
 com/fintrack/controller/PasskeyController.class

@@ -1,5 +1,6 @@
 package com.fintrack.service;
 
+import com.fintrack.config.GeminiProperties;
 import com.fintrack.config.OpenAiProperties;
 import com.fintrack.config.SyncProperties;
 import com.fintrack.dto.AdminSettingsRequest;
@@ -8,6 +9,7 @@ import com.fintrack.model.AppSettings;
 import com.fintrack.repository.AppSettingsRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 
@@ -21,13 +23,16 @@ public class AppSettingsService {
   private final AppSettingsRepository repository;
   private final SyncProperties syncProperties;
   private final OpenAiProperties openAiProperties;
+  private final GeminiProperties geminiProperties;
 
   public AppSettingsService(AppSettingsRepository repository,
                             SyncProperties syncProperties,
-                            OpenAiProperties openAiProperties) {
+                            OpenAiProperties openAiProperties,
+                            GeminiProperties geminiProperties) {
     this.repository = repository;
     this.syncProperties = syncProperties;
     this.openAiProperties = openAiProperties;
+    this.geminiProperties = geminiProperties;
   }
 
   public AdminSettingsResponse getSettings() {
@@ -94,7 +99,7 @@ public class AppSettingsService {
   public boolean isAiEnabled() {
     AppSettings settings = getOrCreate();
     Boolean enabled = settings.getAiEnabled();
-    return enabled != null ? enabled : Boolean.TRUE.equals(openAiProperties.enabled());
+    return enabled != null ? enabled : defaultAiEnabled();
   }
 
   public boolean isAiAvailable() {
@@ -126,11 +131,7 @@ public class AppSettingsService {
 
   public String getAiModel() {
     AppSettings settings = getOrCreate();
-    String model = settings.getAiModel();
-    if (model != null && !model.isBlank()) {
-      return model;
-    }
-    return openAiProperties.model();
+    return normalizeAiModel(settings.getAiModel());
   }
 
   private AppSettings getOrCreate() {
@@ -141,8 +142,8 @@ public class AppSettingsService {
     AppSettings created = new AppSettings();
     created.setSyncEnabled(syncProperties.enabled());
     created.setSyncIntervalMs(syncProperties.intervalMs());
-    created.setAiEnabled(openAiProperties.enabled());
-    created.setAiModel(openAiProperties.model());
+    created.setAiEnabled(defaultAiEnabled());
+    created.setAiModel(defaultAiModel());
     return repository.save(created);
   }
 
@@ -162,8 +163,8 @@ public class AppSettingsService {
     }
     boolean aiEnabled = settings.getAiEnabled() != null
         ? settings.getAiEnabled()
-        : Boolean.TRUE.equals(openAiProperties.enabled());
-    String aiModel = settings.getAiModel() != null ? settings.getAiModel() : openAiProperties.model();
+        : defaultAiEnabled();
+    String aiModel = normalizeAiModel(settings.getAiModel());
     return new AdminSettingsResponse(
         syncEnabled,
         syncIntervalMs,
@@ -175,5 +176,27 @@ public class AppSettingsService {
         settings.getAiLastErrorAt(),
         settings.getUpdatedAt()
     );
+  }
+
+
+  private String normalizeAiModel(String model) {
+    if (model != null && !model.isBlank()) {
+      String trimmed = model.trim();
+      if (trimmed.toLowerCase(Locale.ROOT).startsWith("gemini")) {
+        return trimmed;
+      }
+    }
+    return defaultAiModel();
+  }
+
+  private boolean defaultAiEnabled() {
+    return Boolean.TRUE.equals(geminiProperties.enabled()) || Boolean.TRUE.equals(openAiProperties.enabled());
+  }
+
+  private String defaultAiModel() {
+    if (geminiProperties.model() != null && !geminiProperties.model().isBlank()) {
+      return geminiProperties.model();
+    }
+    return openAiProperties.model();
   }
 }

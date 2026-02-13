@@ -2,16 +2,16 @@ package com.fintrack.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fintrack.config.OpenAiProperties;
+import com.fintrack.config.GeminiProperties;
 import com.fintrack.dto.AiKeyTestResponse;
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -20,19 +20,19 @@ import org.springframework.web.client.RestClientResponseException;
 @Component
 public class OpenAiClient {
   private static final Logger log = LoggerFactory.getLogger(OpenAiClient.class);
-  private static final Pattern CATEGORY_PATTERN = Pattern.compile("\"category\"\\s*:\\s*\"([^\"]+)\"");
+  private static final Pattern CATEGORY_PATTERN = Pattern.compile("\\\"category\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
 
-  private final OpenAiProperties properties;
+  private final GeminiProperties properties;
   private final ObjectMapper objectMapper;
   private final RestClient restClient;
   private final AppSettingsService appSettingsService;
 
-  public OpenAiClient(OpenAiProperties properties, ObjectMapper objectMapper, AppSettingsService appSettingsService) {
+  public OpenAiClient(GeminiProperties properties, ObjectMapper objectMapper, AppSettingsService appSettingsService) {
     this.properties = properties;
     this.objectMapper = objectMapper;
     this.appSettingsService = appSettingsService;
     String baseUrl = properties.baseUrl() == null || properties.baseUrl().isBlank()
-        ? "https://api.openai.com"
+        ? "https://generativelanguage.googleapis.com"
         : properties.baseUrl();
     this.restClient = RestClient.builder().baseUrl(baseUrl).build();
   }
@@ -44,35 +44,37 @@ public class OpenAiClient {
     if (properties.apiKey() == null || properties.apiKey().isBlank()) {
       return null;
     }
-    String configuredModel = appSettingsService.getAiModel();
-    String model = configuredModel == null || configuredModel.isBlank()
-        ? "gpt-4.1-mini"
-        : configuredModel;
 
     Map<String, Object> body = Map.of(
-        "model", model,
-        "messages", List.of(
-            Map.of("role", "system", "content", systemPrompt),
-            Map.of("role", "user", "content", userPrompt)
+        "contents", List.of(
+            Map.of("parts", List.of(Map.of("text", buildPrompt(systemPrompt, userPrompt))))
         ),
-        "temperature", 0.2,
-        "max_tokens", 60
+        "generationConfig", Map.of(
+            "temperature", 0.2,
+            "maxOutputTokens", 80,
+            "candidateCount", 1
+        )
     );
+
+    String model = resolveModel();
 
     try {
       JsonNode response = restClient.post()
-          .uri("/v1/chat/completions")
-          .header(HttpHeaders.AUTHORIZATION, "Bearer " + properties.apiKey())
+          .uri(uriBuilder -> uriBuilder
+              .path("/v1beta/models/{model}:generateContent")
+              .queryParam("key", properties.apiKey())
+              .build(model))
           .contentType(MediaType.APPLICATION_JSON)
           .accept(MediaType.APPLICATION_JSON)
           .body(body)
           .retrieve()
           .body(JsonNode.class);
 
-      String content = response == null
-          ? null
-          : response.path("choices").path(0).path("message").path("content").asText(null);
+      String content = extractGeminiText(response);
       return extractCategory(content, allowedCategories);
+    } catch (RestClientResponseException ex) {
+      handleAiFailure(ex);
+      return null;
     } catch (Exception ex) {
       handleAiFailure(ex);
       return null;
@@ -81,12 +83,14 @@ public class OpenAiClient {
 
   public AiKeyTestResponse testApiKey() {
     if (properties.apiKey() == null || properties.apiKey().isBlank()) {
-      return new AiKeyTestResponse(false, "missing_key", "OpenAI API key ontbreekt.");
+      return new AiKeyTestResponse(false, "missing_key", "Gemini API key ontbreekt.");
     }
     try {
       restClient.get()
-          .uri("/v1/models")
-          .header(HttpHeaders.AUTHORIZATION, "Bearer " + properties.apiKey())
+          .uri(uriBuilder -> uriBuilder
+              .path("/v1beta/models")
+              .queryParam("key", properties.apiKey())
+              .build())
           .accept(MediaType.APPLICATION_JSON)
           .retrieve()
           .body(JsonNode.class);
@@ -94,41 +98,94 @@ public class OpenAiClient {
     } catch (RestClientResponseException ex) {
       return mapTestError(ex.getStatusCode().value(), ex.getResponseBodyAsString());
     } catch (Exception ex) {
-      return new AiKeyTestResponse(false, "error", "Kon OpenAI niet bereiken.");
+      return new AiKeyTestResponse(false, "error", "Kon Gemini niet bereiken.");
     }
+  }
+
+  private String buildPrompt(String systemPrompt, String userPrompt) {
+    return (systemPrompt == null ? "" : systemPrompt.trim())
+        + "\n\n"
+        + (userPrompt == null ? "" : userPrompt.trim());
+  }
+
+  private String resolveModel() {
+    String configuredModel = appSettingsService.getAiModel();
+    if (configuredModel != null && !configuredModel.isBlank()) {
+      String normalized = configuredModel.trim().toLowerCase(Locale.ROOT);
+      if (normalized.startsWith("gemini")) {
+        return configuredModel.trim();
+      }
+    }
+    if (properties.model() != null && !properties.model().isBlank()) {
+      return properties.model().trim();
+    }
+    return "gemini-2.0-flash";
+  }
+
+  private String extractGeminiText(JsonNode response) {
+    if (response == null) {
+      return null;
+    }
+    JsonNode parts = response.path("candidates").path(0).path("content").path("parts");
+    if (parts.isArray() && !parts.isEmpty()) {
+      String text = parts.path(0).path("text").asText(null);
+      if (text != null && !text.isBlank()) {
+        return text;
+      }
+    }
+    return null;
+  }
+
+  private void handleAiFailure(RestClientResponseException ex) {
+    int status = ex.getStatusCode().value();
+    String body = ex.getResponseBodyAsString();
+    String message = (body == null ? "" : body).toLowerCase(Locale.ROOT);
+
+    if (status == 429 && (message.contains("insufficient_quota") || message.contains("quota")
+        || message.contains("resource_exhausted"))) {
+      appSettingsService.recordAiFailure(body, Duration.ofHours(24));
+      log.warn("Gemini categorization paused for 24h due to quota: {}", body);
+      return;
+    }
+    if (status == 429) {
+      appSettingsService.recordAiFailure(body, Duration.ofMinutes(15));
+      log.warn("Gemini categorization paused for 15m due to rate limit: {}", body);
+      return;
+    }
+    log.warn("Gemini categorization failed ({}): {}", status, body);
   }
 
   private void handleAiFailure(Exception ex) {
     String message = ex.getMessage() == null ? "" : ex.getMessage();
-    String lower = message.toLowerCase();
-    if (lower.contains("insufficient_quota") || lower.contains("exceeded your current quota")) {
+    String lower = message.toLowerCase(Locale.ROOT);
+    if (lower.contains("insufficient_quota") || lower.contains("resource_exhausted") || lower.contains("quota")) {
       appSettingsService.recordAiFailure(message, Duration.ofHours(24));
-      log.warn("OpenAI categorization paused for 24h due to quota: {}", message);
+      log.warn("Gemini categorization paused for 24h due to quota: {}", message);
       return;
     }
     if (lower.contains("rate limit") || lower.contains("too many requests") || lower.contains("rate_limit")) {
       appSettingsService.recordAiFailure(message, Duration.ofMinutes(15));
-      log.warn("OpenAI categorization paused for 15m due to rate limit: {}", message);
+      log.warn("Gemini categorization paused for 15m due to rate limit: {}", message);
       return;
     }
-    log.warn("OpenAI categorization failed: {}", message);
+    log.warn("Gemini categorization failed: {}", message);
   }
 
   private AiKeyTestResponse mapTestError(int statusCode, String body) {
-    String lower = body == null ? "" : body.toLowerCase();
-    if (statusCode == 401 || lower.contains("invalid_api_key") || lower.contains("invalid api key")) {
-      return new AiKeyTestResponse(false, "invalid_key", "Ongeldige OpenAI API key.");
+    String lower = body == null ? "" : body.toLowerCase(Locale.ROOT);
+    if (statusCode == 401 || lower.contains("invalid api key") || lower.contains("api_key_invalid")) {
+      return new AiKeyTestResponse(false, "invalid_key", "Ongeldige Gemini API key.");
     }
-    if (statusCode == 429 && lower.contains("insufficient_quota")) {
-      return new AiKeyTestResponse(false, "quota", "OpenAI quota is opgebruikt.");
+    if (statusCode == 429 && (lower.contains("insufficient_quota") || lower.contains("resource_exhausted"))) {
+      return new AiKeyTestResponse(false, "quota", "Gemini quota is opgebruikt.");
     }
     if (statusCode == 429) {
-      return new AiKeyTestResponse(false, "rate_limit", "Te veel aanvragen naar OpenAI.");
+      return new AiKeyTestResponse(false, "rate_limit", "Te veel aanvragen naar Gemini.");
     }
     if (statusCode == 403) {
-      return new AiKeyTestResponse(false, "forbidden", "Geen toegang tot OpenAI.");
+      return new AiKeyTestResponse(false, "forbidden", "Geen toegang tot Gemini.");
     }
-    return new AiKeyTestResponse(false, "error", "OpenAI fout (" + statusCode + ").");
+    return new AiKeyTestResponse(false, "error", "Gemini fout (" + statusCode + ").");
   }
 
   private String extractCategory(String content, List<String> allowedCategories) {
