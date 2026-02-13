@@ -1,5 +1,6 @@
 com/fintrack/model/User.class
 com/fintrack/service/SyncScheduler.class
+com/fintrack/repository/RefreshTokenRepository.class
 com/fintrack/provider/coingecko/CoinGeckoClient$CachedPrice.class
 com/fintrack/config/BitvavoProperties.class
 com/fintrack/provider/coingecko/CoinGeckoClient$SearchCoin.class
@@ -25,9 +26,11 @@ com/fintrack/controller/CategoryController.class
 com/fintrack/repository/ConnectionRepository.class
 com/fintrack/model/HouseholdRole.class
 com/fintrack/model/Household.class
+com/fintrack/dto/RefreshTokenRequest.class
 com/fintrack/service/TransactionCategoryService.class
 com/fintrack/model/TransactionCategory.class
 com/fintrack/dto/SpendingCategorySummary.class
+com/fintrack/model/RefreshToken.class
 com/fintrack/service/FinanceService.class
 com/fintrack/provider/tink/TinkProvider.class
 com/fintrack/controller/FinanceController.class
@@ -114,6 +117,7 @@ com/fintrack/provider/enablebanking/EnableBankingClient.class
 com/fintrack/provider/coingecko/CoinGeckoClient$2.class
 com/fintrack/service/SyncProgressService.class
 com/fintrack/service/PasskeyCredentialStore.class
+com/fintrack/service/RefreshTokenService.class
 com/fintrack/dto/HouseholdResponse.class
 com/fintrack/service/ConnectionService.class
 com/fintrack/provider/coingecko/CoinGeckoClient.class
@@ -131,6 +135,7 @@ com/fintrack/controller/AdminSettingsController.class
 com/fintrack/config/AsyncConfig.class
 com/fintrack/service/CategoryService$CachedAccounts.class
 com/fintrack/provider/coingecko/CoinGeckoClient$CoinListItem.class
+com/fintrack/service/RefreshTokenService$TokenResult.class
 com/fintrack/service/CategoryService$CategoryResult.class
 com/fintrack/service/NoopNotificationService.class
 com/fintrack/dto/AdminSettingsRequest.class

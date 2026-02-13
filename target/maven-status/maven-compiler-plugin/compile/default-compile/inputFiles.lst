@@ -8,6 +8,7 @@
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/config/CorsConfig.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/SyncStatus.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/PasskeyChallenge.java
+/Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/repository/RefreshTokenRepository.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/UpdateTransactionCategoryRequest.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/provider/bitvavo/BitvavoClient.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/provider/bitvavo/BitvavoProvider.java
@@ -17,6 +18,7 @@
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/repository/TransactionCategoryRepository.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/config/AppProperties.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/service/CryptoService.java
+/Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/RefreshTokenRequest.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/config/OpenAiProperties.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/CreateTransactionRequest.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/service/MailNotificationService.java
@@ -44,6 +46,7 @@
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/ConnectionStatus.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/service/CategoryService.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/controller/SavingsGoalController.java
+/Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/RefreshToken.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/SavingsGoal.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/Household.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/ConnectionType.java
@@ -97,6 +100,7 @@
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/service/HouseholdService.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/service/PasskeyService.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/repository/CategoryOverrideRepository.java
+/Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/service/RefreshTokenService.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/provider/tink/TinkClient.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/repository/PasskeyCredentialRepository.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/provider/tink/TinkProvider.java

@@ -2,6 +2,7 @@ package com.fintrack.service;
 
 import com.fintrack.model.User;
 import com.fintrack.repository.UserRepository;
+import java.util.UUID;
 import java.util.Optional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -34,5 +35,10 @@ public class UserService {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
     }
     return existing.get();
+  }
+
+  public User findById(UUID userId) {
+    return userRepository.findById(userId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
   }
 }

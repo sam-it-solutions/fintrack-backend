@@ -45,19 +45,22 @@ public class PasskeyService {
   private final PasskeyCredentialRepository credentialRepository;
   private final UserRepository userRepository;
   private final JwtService jwtService;
+  private final RefreshTokenService refreshTokenService;
 
   public PasskeyService(RelyingParty relyingParty,
                         ObjectMapper objectMapper,
                         PasskeyChallengeRepository challengeRepository,
                         PasskeyCredentialRepository credentialRepository,
                         UserRepository userRepository,
-                        JwtService jwtService) {
+                        JwtService jwtService,
+                        RefreshTokenService refreshTokenService) {
     this.relyingParty = relyingParty;
     this.objectMapper = objectMapper;
     this.challengeRepository = challengeRepository;
     this.credentialRepository = credentialRepository;
     this.userRepository = userRepository;
     this.jwtService = jwtService;
+    this.refreshTokenService = refreshTokenService;
   }
 
   public PasskeyStartResponse startRegistration(UUID userId) {
@@ -148,7 +151,8 @@ public class PasskeyService {
     updateSignatureCount(result.getCredentialId(), result.getSignatureCount());
     challengeRepository.delete(challenge);
     String token = jwtService.generateToken(user.getId(), user.getEmail());
-    return new AuthResponse(token, user.getId());
+    RefreshTokenService.TokenResult refresh = refreshTokenService.issue(user.getId());
+    return new AuthResponse(token, user.getId(), refresh.token(), refresh.expiresAt());
   }
 
   private void updateSignatureCount(ByteArray credentialId, long signatureCount) {
