@@ -119,7 +119,7 @@ public class RuleService {
     if (!toSave.isEmpty()) {
       transactionRepository.saveAll(toSave);
     }
-    return new RecategorizeResponse(updated, transactions.size());
+    return new RecategorizeResponse(updated, transactions.size(), 0);
   }
 
   private CategoryOverride requireRule(UUID userId, UUID ruleId) {
