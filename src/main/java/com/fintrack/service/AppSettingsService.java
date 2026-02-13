@@ -19,6 +19,7 @@ public class AppSettingsService {
   private static final long MAX_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000L;
   private static final long MIN_CRYPTO_SYNC_INTERVAL_MS = 60 * 1000L;
   private static final long MAX_CRYPTO_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000L;
+  private static final int MAX_AI_ERROR_LENGTH = 255;
 
   private final AppSettingsRepository repository;
   private final SyncProperties syncProperties;
@@ -123,7 +124,7 @@ public class AppSettingsService {
       settings.setAiDisabledUntil(nextDisabledUntil);
     }
     if (message != null && !message.isBlank()) {
-      settings.setAiLastError(message);
+      settings.setAiLastError(normalizeAiError(message));
       settings.setAiLastErrorAt(now);
     }
     repository.save(settings);
@@ -198,5 +199,13 @@ public class AppSettingsService {
       return geminiProperties.model();
     }
     return openAiProperties.model();
+  }
+
+  private String normalizeAiError(String message) {
+    String compact = message.replaceAll("\\s+", " ").trim();
+    if (compact.length() <= MAX_AI_ERROR_LENGTH) {
+      return compact;
+    }
+    return compact.substring(0, MAX_AI_ERROR_LENGTH - 3) + "...";
   }
 }
