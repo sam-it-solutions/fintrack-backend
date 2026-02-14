@@ -236,21 +236,68 @@ public class BitvavoClient {
     String id = text(node, "id", "transactionId", "tradeId", "orderId", "uuid");
     String market = text(node, "market", "pair", "symbol");
     String symbol = text(node, "symbol", "asset", "baseCurrency");
+    String sentCurrency = text(node, "sentCurrency");
+    String receivedCurrency = text(node, "receivedCurrency");
+    BigDecimal sentAmount = decimal(node, "sentAmount");
+    BigDecimal receivedAmount = decimal(node, "receivedAmount");
     if (symbol == null && market != null && market.contains("-")) {
       symbol = market.substring(0, market.indexOf('-'));
     }
 
     String type = text(node, "type", "event", "eventType", "orderType");
     String side = text(node, "side", "action");
+    if (side == null && type != null) {
+      String normalized = type.toLowerCase();
+      if ("buy".equals(normalized) || "sell".equals(normalized)) {
+        side = normalized;
+      }
+    }
     BigDecimal amount = decimal(node, "amount", "quantity", "filledAmount", "baseAmount");
     BigDecimal price = decimal(node, "price", "fillPrice", "avgPrice", "averagePrice", "rate");
     BigDecimal amountQuote = decimal(node, "amountQuote", "quoteAmount", "filledAmountQuote", "cost");
+    String quoteCurrency = text(node, "priceCurrency", "quoteCurrency");
+    if (side != null && "buy".equalsIgnoreCase(side)) {
+      // Legacy /account/history payload: sent = quote, received = base.
+      if (amount == null) {
+        amount = receivedAmount;
+      }
+      if (amountQuote == null) {
+        amountQuote = sentAmount;
+      }
+      if (symbol == null) {
+        symbol = receivedCurrency;
+      }
+      if (quoteCurrency == null) {
+        quoteCurrency = sentCurrency;
+      }
+    } else if (side != null && "sell".equalsIgnoreCase(side)) {
+      // Legacy /account/history payload: sent = base, received = quote.
+      if (amount == null) {
+        amount = sentAmount;
+      }
+      if (amountQuote == null) {
+        amountQuote = receivedAmount;
+      }
+      if (symbol == null) {
+        symbol = sentCurrency;
+      }
+      if (quoteCurrency == null) {
+        quoteCurrency = receivedCurrency;
+      }
+    }
+    if (market == null && symbol != null && quoteCurrency != null) {
+      market = symbol + "-" + quoteCurrency;
+    }
     if (amountQuote == null && amount != null && price != null) {
       amountQuote = amount.abs().multiply(price.abs());
     }
 
     BigDecimal fee = decimal(node, "fee", "feeAmount", "takerFee", "makerFee");
-    String feeCurrency = text(node, "feeCurrency", "feeAsset", "feeSymbol");
+    BigDecimal feesAmount = decimal(node, "feesAmount");
+    if (fee == null) {
+      fee = feesAmount;
+    }
+    String feeCurrency = text(node, "feeCurrency", "feeAsset", "feeSymbol", "feesCurrency");
     JsonNode feeNode = node.get("fee");
     if ((fee == null || feeCurrency == null) && feeNode != null && feeNode.isObject()) {
       if (fee == null) {
@@ -261,7 +308,7 @@ public class BitvavoClient {
       }
     }
 
-    Long timestamp = longValue(node, "timestamp", "time", "created", "createdAt", "updated", "updatedAt", "date");
+    Long timestamp = longValue(node, "timestamp", "time", "created", "createdAt", "updated", "updatedAt", "date", "executedAt");
 
     return new Transaction(
         id,
