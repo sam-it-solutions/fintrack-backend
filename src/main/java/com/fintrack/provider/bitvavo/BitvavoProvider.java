@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -153,6 +154,7 @@ public class BitvavoProvider implements ConnectionProvider {
 
     syncProgressService.update(connection, "Trades ophalen", 70);
     int transactionsImported = 0;
+    Map<String, BigDecimal> investedEurBySymbol = new HashMap<>();
     List<BitvavoClient.Transaction> transactions;
     try {
       transactions = client.getTransactions(apiKey, apiSecret, markets);
@@ -182,6 +184,7 @@ public class BitvavoProvider implements ConnectionProvider {
             existingTx.setBookingDate(bookingDate);
             transactionRepository.save(existingTx);
           }
+          registerInvestment(investedEurBySymbol, asset, t);
           continue;
         }
         BigDecimal amount = t.amount() == null ? BigDecimal.ZERO : t.amount().abs();
@@ -216,12 +219,45 @@ public class BitvavoProvider implements ConnectionProvider {
         }
         tx.setCategoryReason(categoryResult.reason());
         transactionRepository.save(tx);
+        registerInvestment(investedEurBySymbol, asset, t);
         transactionsImported++;
+      }
+    }
+
+    if (!investedEurBySymbol.isEmpty() && balances != null) {
+      for (BitvavoClient.Balance balance : balances) {
+        if (balance == null || balance.symbol() == null) {
+          continue;
+        }
+        String symbol = balance.symbol().toUpperCase();
+        FinancialAccount account = accountRepository
+            .findByConnectionIdAndExternalId(connection.getId(), balance.symbol())
+            .orElse(null);
+        if (account == null) {
+          continue;
+        }
+        BigDecimal invested = investedEurBySymbol.get(symbol);
+        if (invested != null) {
+          account.setOpeningBalance(invested.max(BigDecimal.ZERO));
+          accountRepository.save(account);
+        }
       }
     }
 
     syncProgressService.update(connection, "Afwerken", 95);
     return new SyncResult(accountsUpdated, transactionsImported, "OK");
+  }
+
+  private static void registerInvestment(Map<String, BigDecimal> investedEurBySymbol,
+                                         String asset,
+                                         BitvavoClient.Transaction t) {
+    if (investedEurBySymbol == null || asset == null || t == null || t.amount() == null || t.price() == null) {
+      return;
+    }
+    String symbol = asset.toUpperCase();
+    BigDecimal tradeValueEur = t.amount().abs().multiply(t.price().abs());
+    BigDecimal signed = "sell".equalsIgnoreCase(t.side()) ? tradeValueEur.negate() : tradeValueEur;
+    investedEurBySymbol.merge(symbol, signed, BigDecimal::add);
   }
 
   private static LocalDate resolveBookingDate(BitvavoClient.Transaction t) {
