@@ -148,6 +148,7 @@ com/fintrack/repository/AccountTransactionRepository.class
 com/fintrack/repository/PasskeyCredentialRepository.class
 com/fintrack/controller/PasskeyController.class
 com/fintrack/provider/bitvavo/BitvavoClient$3.class
+com/fintrack/provider/bitvavo/BitvavoProvider$InvestState.class
 com/fintrack/model/PasskeyCredential.class
 com/fintrack/dto/ProviderResponse.class
 com/fintrack/repository/TransactionCategoryRepository.class

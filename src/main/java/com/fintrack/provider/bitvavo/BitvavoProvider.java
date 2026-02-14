@@ -18,13 +18,16 @@ import com.fintrack.repository.FinancialAccountRepository;
 import com.fintrack.service.CategoryService;
 import com.fintrack.service.SyncProgressService;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -155,7 +158,7 @@ public class BitvavoProvider implements ConnectionProvider {
 
     syncProgressService.update(connection, "Trades ophalen", 70);
     int transactionsImported = 0;
-    Map<String, BigDecimal> investedEurBySymbol = new HashMap<>();
+    Map<String, InvestState> investmentStateBySymbol = new HashMap<>();
     List<BitvavoClient.Transaction> transactions;
     try {
       transactions = client.getTransactions(apiKey, apiSecret, markets);
@@ -165,19 +168,31 @@ public class BitvavoProvider implements ConnectionProvider {
     }
     log.info("Bitvavo sync transactions: {}", transactions == null ? 0 : transactions.size());
     if (transactions != null) {
+      transactions = transactions.stream()
+          .filter(Objects::nonNull)
+          .sorted(Comparator.comparingLong(t -> t.timestamp() == null ? Long.MAX_VALUE : t.timestamp()))
+          .toList();
       for (BitvavoClient.Transaction t : transactions) {
-        if (t == null || t.id() == null) {
+        if (t == null) {
           continue;
         }
         String asset = extractAssetSymbol(t);
+        registerInvestment(investmentStateBySymbol, asset, t, priceByMarket, fallbackPrices);
+        String externalId = resolveExternalTransactionId(t);
+        if (externalId == null) {
+          continue;
+        }
         FinancialAccount account = asset == null ? null : accountRepository
             .findByConnectionIdAndExternalId(connection.getId(), asset)
             .orElse(null);
-        registerInvestment(investedEurBySymbol, asset, t);
         if (account == null) {
           continue;
         }
-        var existing = transactionRepository.findFirstByAccountIdAndExternalIdOrderByCreatedAtAsc(account.getId(), t.id());
+        String side = resolveSide(t);
+        if (side == null) {
+          continue;
+        }
+        var existing = transactionRepository.findFirstByAccountIdAndExternalIdOrderByCreatedAtAsc(account.getId(), externalId);
         if (existing.isPresent()) {
           AccountTransaction existingTx = existing.get();
           LocalDate bookingDate = resolveBookingDate(t);
@@ -188,7 +203,7 @@ public class BitvavoProvider implements ConnectionProvider {
           continue;
         }
         BigDecimal amount = t.amount() == null ? BigDecimal.ZERO : t.amount().abs();
-        TransactionDirection direction = "sell".equalsIgnoreCase(t.side()) ? TransactionDirection.IN : TransactionDirection.OUT;
+        TransactionDirection direction = "sell".equalsIgnoreCase(side) ? TransactionDirection.IN : TransactionDirection.OUT;
         AccountTransaction tx = new AccountTransaction();
         tx.setAccount(account);
         tx.setAmount(amount);
@@ -197,8 +212,8 @@ public class BitvavoProvider implements ConnectionProvider {
         String description = "Bitvavo trade " + (asset == null ? (t.symbol() == null ? "crypto" : t.symbol()) : asset);
         tx.setDescription(description);
         tx.setBookingDate(resolveBookingDate(t));
-        tx.setExternalId(t.id());
-        tx.setProviderTransactionId(t.id());
+        tx.setExternalId(externalId);
+        tx.setProviderTransactionId(externalId);
         tx.setStatus("BOOKED");
         tx.setTransactionType("TRADE");
         tx.setMerchantName("Bitvavo");
@@ -223,7 +238,7 @@ public class BitvavoProvider implements ConnectionProvider {
       }
     }
 
-    if (!investedEurBySymbol.isEmpty() && balances != null) {
+    if (balances != null) {
       for (BitvavoClient.Balance balance : balances) {
         if (balance == null || balance.symbol() == null) {
           continue;
@@ -235,11 +250,10 @@ public class BitvavoProvider implements ConnectionProvider {
         if (account == null) {
           continue;
         }
-        BigDecimal invested = investedEurBySymbol.get(symbol);
-        if (invested != null) {
-          account.setOpeningBalance(invested.max(BigDecimal.ZERO));
-          accountRepository.save(account);
-        }
+        InvestState state = investmentStateBySymbol.get(symbol);
+        BigDecimal invested = state == null ? BigDecimal.ZERO : state.costEur.max(BigDecimal.ZERO);
+        account.setOpeningBalance(invested);
+        accountRepository.save(account);
       }
     }
 
@@ -247,31 +261,53 @@ public class BitvavoProvider implements ConnectionProvider {
     return new SyncResult(accountsUpdated, transactionsImported, "OK");
   }
 
-  private static void registerInvestment(Map<String, BigDecimal> investedEurBySymbol,
+  private static void registerInvestment(Map<String, InvestState> investmentStateBySymbol,
                                          String asset,
-                                         BitvavoClient.Transaction t) {
-    if (investedEurBySymbol == null || asset == null || t == null || t.side() == null) {
+                                         BitvavoClient.Transaction t,
+                                         Map<String, BigDecimal> priceByMarket,
+                                         Map<String, BigDecimal> fallbackPrices) {
+    if (investmentStateBySymbol == null || asset == null || t == null || t.amount() == null) {
+      return;
+    }
+    String side = resolveSide(t);
+    if (side == null) {
       return;
     }
     String symbol = asset.toUpperCase(Locale.ROOT);
-    BigDecimal tradeValueEur;
-    if (t.amountQuote() != null) {
-      tradeValueEur = t.amountQuote().abs();
-    } else if (t.amount() != null && t.price() != null) {
-      tradeValueEur = t.amount().abs().multiply(t.price().abs());
-    } else {
+    String quoteCurrency = extractQuoteCurrency(t);
+    BigDecimal tradeValueEur = resolveTradeValueEur(t, quoteCurrency, priceByMarket, fallbackPrices);
+    if (tradeValueEur == null) {
       return;
     }
-    BigDecimal eurFee = "EUR".equalsIgnoreCase(t.feeCurrency()) && t.fee() != null ? t.fee().abs() : BigDecimal.ZERO;
-    BigDecimal signed;
-    if ("sell".equalsIgnoreCase(t.side())) {
-      signed = tradeValueEur.subtract(eurFee).negate();
-    } else if ("buy".equalsIgnoreCase(t.side())) {
-      signed = tradeValueEur.add(eurFee);
-    } else {
+    BigDecimal quantity = t.amount().abs();
+    if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
       return;
     }
-    investedEurBySymbol.merge(symbol, signed, BigDecimal::add);
+    BigDecimal feeEur = resolveFeeEur(t, quoteCurrency, priceByMarket, fallbackPrices);
+    BigDecimal feeInBaseUnits = "buy".equalsIgnoreCase(side) || "sell".equalsIgnoreCase(side)
+        ? resolveFeeInBaseUnits(t, symbol)
+        : BigDecimal.ZERO;
+
+    InvestState state = investmentStateBySymbol.computeIfAbsent(symbol, key -> new InvestState());
+    if ("buy".equalsIgnoreCase(side)) {
+      BigDecimal netUnits = quantity.subtract(feeInBaseUnits).max(BigDecimal.ZERO);
+      state.units = state.units.add(netUnits);
+      state.costEur = state.costEur.add(tradeValueEur).add(feeEur);
+      return;
+    }
+    if ("sell".equalsIgnoreCase(side)) {
+      BigDecimal unitsToReduce = quantity.add(feeInBaseUnits);
+      if (state.units.compareTo(BigDecimal.ZERO) <= 0 || unitsToReduce.compareTo(BigDecimal.ZERO) <= 0) {
+        return;
+      }
+      BigDecimal reducibleUnits = unitsToReduce.min(state.units);
+      BigDecimal avgCost = state.costEur.compareTo(BigDecimal.ZERO) <= 0
+          ? BigDecimal.ZERO
+          : state.costEur.divide(state.units, 16, RoundingMode.HALF_UP);
+      BigDecimal costReduction = avgCost.multiply(reducibleUnits);
+      state.units = state.units.subtract(reducibleUnits).max(BigDecimal.ZERO);
+      state.costEur = state.costEur.subtract(costReduction).max(BigDecimal.ZERO);
+    }
   }
 
   private static String extractAssetSymbol(BitvavoClient.Transaction t) {
@@ -295,6 +331,144 @@ public class BitvavoProvider implements ConnectionProvider {
       }
     }
     return null;
+  }
+
+  private static String extractQuoteCurrency(BitvavoClient.Transaction t) {
+    if (t == null) {
+      return null;
+    }
+    String value = t.market();
+    if (value == null || value.isBlank()) {
+      value = t.symbol();
+    }
+    if (value != null && !value.isBlank()) {
+      int separator = value.indexOf('-');
+      if (separator > 0 && separator < value.length() - 1) {
+        return value.substring(separator + 1).toUpperCase(Locale.ROOT);
+      }
+    }
+    return "EUR";
+  }
+
+  private static BigDecimal resolveTradeValueEur(BitvavoClient.Transaction t,
+                                                 String quoteCurrency,
+                                                 Map<String, BigDecimal> priceByMarket,
+                                                 Map<String, BigDecimal> fallbackPrices) {
+    BigDecimal quoteValue;
+    if (t.amountQuote() != null) {
+      quoteValue = t.amountQuote().abs();
+    } else if (t.amount() != null && t.price() != null) {
+      quoteValue = t.amount().abs().multiply(t.price().abs());
+    } else {
+      return null;
+    }
+    BigDecimal quoteToEurRate = resolveQuoteToEurRate(quoteCurrency, priceByMarket, fallbackPrices);
+    if (quoteToEurRate == null) {
+      return null;
+    }
+    return quoteValue.multiply(quoteToEurRate);
+  }
+
+  private static BigDecimal resolveFeeEur(BitvavoClient.Transaction t,
+                                          String quoteCurrency,
+                                          Map<String, BigDecimal> priceByMarket,
+                                          Map<String, BigDecimal> fallbackPrices) {
+    if (t.fee() == null || t.feeCurrency() == null) {
+      return BigDecimal.ZERO;
+    }
+    String feeCurrency = t.feeCurrency().toUpperCase(Locale.ROOT);
+    if (feeCurrency.equalsIgnoreCase(extractAssetSymbol(t))) {
+      return BigDecimal.ZERO;
+    }
+    BigDecimal rate = resolveQuoteToEurRate(feeCurrency, priceByMarket, fallbackPrices);
+    if (rate == null) {
+      // Fallback: if fee currency equals quote currency and quote conversion is known.
+      rate = resolveQuoteToEurRate(quoteCurrency, priceByMarket, fallbackPrices);
+    }
+    if (rate == null) {
+      return BigDecimal.ZERO;
+    }
+    return t.fee().abs().multiply(rate);
+  }
+
+  private static BigDecimal resolveFeeInBaseUnits(BitvavoClient.Transaction t, String baseSymbol) {
+    if (t.fee() == null || t.feeCurrency() == null || baseSymbol == null) {
+      return BigDecimal.ZERO;
+    }
+    return baseSymbol.equalsIgnoreCase(t.feeCurrency()) ? t.fee().abs() : BigDecimal.ZERO;
+  }
+
+  private static String resolveSide(BitvavoClient.Transaction t) {
+    if (t == null) {
+      return null;
+    }
+    if (t.side() != null && !t.side().isBlank()) {
+      String side = t.side().toLowerCase(Locale.ROOT);
+      if ("buy".equals(side) || "sell".equals(side)) {
+        return side;
+      }
+    }
+    if (t.type() != null && !t.type().isBlank()) {
+      String type = t.type().toLowerCase(Locale.ROOT);
+      if (type.contains("buy")) {
+        return "buy";
+      }
+      if (type.contains("sell")) {
+        return "sell";
+      }
+    }
+    return null;
+  }
+
+  private static String resolveExternalTransactionId(BitvavoClient.Transaction t) {
+    if (t == null) {
+      return null;
+    }
+    if (t.id() != null && !t.id().isBlank()) {
+      return t.id();
+    }
+    String asset = extractAssetSymbol(t);
+    String side = resolveSide(t);
+    if (asset == null || side == null || t.timestamp() == null || t.amount() == null) {
+      return null;
+    }
+    return "bitvavo-synth:" + asset + ":" + side + ":" + t.timestamp() + ":" + t.amount().toPlainString()
+        + ":" + (t.price() == null ? "0" : t.price().toPlainString());
+  }
+
+  private static BigDecimal resolveQuoteToEurRate(String quoteCurrency,
+                                                  Map<String, BigDecimal> priceByMarket,
+                                                  Map<String, BigDecimal> fallbackPrices) {
+    if (quoteCurrency == null || quoteCurrency.isBlank()) {
+      return BigDecimal.ONE;
+    }
+    String quote = quoteCurrency.toUpperCase(Locale.ROOT);
+    if ("EUR".equals(quote)) {
+      return BigDecimal.ONE;
+    }
+    BigDecimal direct = priceByMarket.get(quote + "-EUR");
+    if (direct != null && direct.compareTo(BigDecimal.ZERO) > 0) {
+      return direct;
+    }
+    BigDecimal inverse = priceByMarket.get("EUR-" + quote);
+    if (inverse != null && inverse.compareTo(BigDecimal.ZERO) > 0) {
+      return BigDecimal.ONE.divide(inverse, 16, RoundingMode.HALF_UP);
+    }
+    BigDecimal viaFallback = fallbackPrices.get(quote);
+    if (viaFallback != null && viaFallback.compareTo(BigDecimal.ZERO) > 0) {
+      return viaFallback;
+    }
+    BigDecimal quoteUsdt = priceByMarket.get(quote + "-USDT");
+    BigDecimal usdtEur = priceByMarket.get("USDT-EUR");
+    if (quoteUsdt != null && usdtEur != null && quoteUsdt.compareTo(BigDecimal.ZERO) > 0 && usdtEur.compareTo(BigDecimal.ZERO) > 0) {
+      return quoteUsdt.multiply(usdtEur);
+    }
+    return null;
+  }
+
+  private static final class InvestState {
+    private BigDecimal units = BigDecimal.ZERO;
+    private BigDecimal costEur = BigDecimal.ZERO;
   }
 
   private static LocalDate resolveBookingDate(BitvavoClient.Transaction t) {
