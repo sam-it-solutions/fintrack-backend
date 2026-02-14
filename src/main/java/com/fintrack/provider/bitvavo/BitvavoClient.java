@@ -49,18 +49,38 @@ public class BitvavoClient {
   public List<Transaction> getTransactions(String apiKey, String apiSecret, List<String> markets) {
     List<Transaction> collected = new ArrayList<>();
     try {
-      List<Transaction> result = requestTransactions(apiKey, apiSecret, "/transactions");
-      log.info("Bitvavo API /transactions returned {}", result == null ? 0 : result.size());
+      List<Transaction> result = requestTransactions(apiKey, apiSecret, "/account/history?type=trade");
+      log.info("Bitvavo API /account/history?type=trade returned {}", result == null ? 0 : result.size());
       if (result != null) {
         collected.addAll(result);
       }
+    } catch (HttpClientErrorException.BadRequest ex) {
+      log.info("Bitvavo API /account/history?type=trade not supported, retrying without type filter");
+      try {
+        List<Transaction> result = requestTransactions(apiKey, apiSecret, "/account/history");
+        log.info("Bitvavo API /account/history returned {}", result == null ? 0 : result.size());
+        if (result != null) {
+          collected.addAll(result);
+        }
+      } catch (Exception innerEx) {
+        log.warn("Bitvavo API /account/history failed: {}", innerEx.getMessage());
+      }
     } catch (HttpClientErrorException.NotFound ex) {
-      log.info("Bitvavo API /transactions not found");
+      log.info("Bitvavo API /account/history not found, trying legacy endpoint");
+      try {
+        List<Transaction> result = requestTransactions(apiKey, apiSecret, "/transactions");
+        log.info("Bitvavo API /transactions returned {}", result == null ? 0 : result.size());
+        if (result != null) {
+          collected.addAll(result);
+        }
+      } catch (Exception innerEx) {
+        log.warn("Bitvavo API /transactions failed: {}", innerEx.getMessage());
+      }
     } catch (Exception ex) {
-      log.warn("Bitvavo API /transactions failed: {}", ex.getMessage());
+      log.warn("Bitvavo API /account/history failed: {}", ex.getMessage());
     }
 
-    if (markets != null && !markets.isEmpty()) {
+    if (collected.isEmpty() && markets != null && !markets.isEmpty()) {
       List<Transaction> tradesAllMarkets = new ArrayList<>();
       for (String market : markets) {
         try {
@@ -183,9 +203,12 @@ public class BitvavoClient {
       String symbol,
       String market,
       BigDecimal amount,
+      BigDecimal amountQuote,
       BigDecimal price,
       Long timestamp,
       String side,
+      BigDecimal fee,
+      String feeCurrency,
       String type) {}
 
   public record Market(String market, String base, String quote, String status) {}
