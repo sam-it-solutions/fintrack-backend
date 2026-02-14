@@ -1,9 +1,12 @@
 package com.fintrack.provider.bitvavo;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fintrack.config.BitvavoProperties;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,13 +27,16 @@ public class BitvavoClient {
   private static final String HMAC_SHA256 = "HmacSHA256";
   private static final String USER_AGENT = "Fintrack/1.0";
   private static final Logger log = LoggerFactory.getLogger(BitvavoClient.class);
+  private static final String[] TX_ARRAY_KEYS = {"history", "transactions", "items", "rows", "data", "result"};
 
   private final RestClient restClient;
+  private final ObjectMapper objectMapper;
 
-  public BitvavoClient(BitvavoProperties properties) {
+  public BitvavoClient(BitvavoProperties properties, ObjectMapper objectMapper) {
     this.restClient = RestClient.builder()
         .baseUrl(properties.baseUrl())
         .build();
+    this.objectMapper = objectMapper;
   }
 
   public List<Balance> getBalances(String apiKey, String apiSecret) {
@@ -144,20 +150,17 @@ public class BitvavoClient {
   }
 
   private List<Transaction> requestTransactions(String apiKey, String apiSecret, String path) {
-    SignedHeaders headers = signedHeaders(apiKey, apiSecret, "GET", path, "");
-    return restClient.get()
-        .uri(path)
-        .header("Bitvavo-Access-Key", headers.apiKey())
-        .header("Bitvavo-Access-Signature", headers.signature())
-        .header("Bitvavo-Access-Timestamp", headers.timestamp())
-        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-        .header(HttpHeaders.USER_AGENT, USER_AGENT)
-        .retrieve()
-        .body(new ParameterizedTypeReference<>() {});
+    String raw = requestSignedJson(apiKey, apiSecret, path);
+    return parseTransactionsResponse(raw);
   }
 
   private List<Transaction> requestTrades(String apiKey, String apiSecret, String market) {
     String path = "/trades?market=" + market;
+    String raw = requestSignedJson(apiKey, apiSecret, path);
+    return parseTransactionsResponse(raw);
+  }
+
+  private String requestSignedJson(String apiKey, String apiSecret, String path) {
     SignedHeaders headers = signedHeaders(apiKey, apiSecret, "GET", path, "");
     return restClient.get()
         .uri(path)
@@ -167,7 +170,204 @@ public class BitvavoClient {
         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
         .header(HttpHeaders.USER_AGENT, USER_AGENT)
         .retrieve()
-        .body(new ParameterizedTypeReference<>() {});
+        .body(String.class);
+  }
+
+  private List<Transaction> parseTransactionsResponse(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return List.of();
+    }
+    try {
+      JsonNode root = objectMapper.readTree(raw);
+      JsonNode arrayNode = findTransactionArray(root);
+      if (arrayNode == null || !arrayNode.isArray()) {
+        return List.of();
+      }
+      List<Transaction> transactions = new ArrayList<>();
+      for (JsonNode item : arrayNode) {
+        Transaction tx = parseTransaction(item);
+        if (tx != null) {
+          transactions.add(tx);
+        }
+      }
+      return transactions;
+    } catch (Exception ex) {
+      throw new IllegalStateException("Failed to parse Bitvavo transactions payload: " + abbreviate(raw), ex);
+    }
+  }
+
+  private JsonNode findTransactionArray(JsonNode node) {
+    if (node == null || node.isNull()) {
+      return null;
+    }
+    if (node.isArray()) {
+      return node;
+    }
+    if (!node.isObject()) {
+      return null;
+    }
+    for (String key : TX_ARRAY_KEYS) {
+      JsonNode candidate = node.get(key);
+      if (candidate != null && candidate.isArray()) {
+        return candidate;
+      }
+    }
+    JsonNode response = node.get("response");
+    if (response != null) {
+      JsonNode nested = findTransactionArray(response);
+      if (nested != null) {
+        return nested;
+      }
+    }
+    JsonNode body = node.get("body");
+    if (body != null) {
+      JsonNode nested = findTransactionArray(body);
+      if (nested != null) {
+        return nested;
+      }
+    }
+    return null;
+  }
+
+  private Transaction parseTransaction(JsonNode node) {
+    if (node == null || !node.isObject()) {
+      return null;
+    }
+    String id = text(node, "id", "transactionId", "tradeId", "orderId", "uuid");
+    String market = text(node, "market", "pair", "symbol");
+    String symbol = text(node, "symbol", "asset", "baseCurrency");
+    if (symbol == null && market != null && market.contains("-")) {
+      symbol = market.substring(0, market.indexOf('-'));
+    }
+
+    String type = text(node, "type", "event", "eventType", "orderType");
+    String side = text(node, "side", "action");
+    BigDecimal amount = decimal(node, "amount", "quantity", "filledAmount", "baseAmount");
+    BigDecimal price = decimal(node, "price", "fillPrice", "avgPrice", "averagePrice", "rate");
+    BigDecimal amountQuote = decimal(node, "amountQuote", "quoteAmount", "filledAmountQuote", "cost");
+    if (amountQuote == null && amount != null && price != null) {
+      amountQuote = amount.abs().multiply(price.abs());
+    }
+
+    BigDecimal fee = decimal(node, "fee", "feeAmount", "takerFee", "makerFee");
+    String feeCurrency = text(node, "feeCurrency", "feeAsset", "feeSymbol");
+    JsonNode feeNode = node.get("fee");
+    if ((fee == null || feeCurrency == null) && feeNode != null && feeNode.isObject()) {
+      if (fee == null) {
+        fee = parseDecimal(feeNode);
+      }
+      if (feeCurrency == null) {
+        feeCurrency = text(feeNode, "currency", "symbol", "asset");
+      }
+    }
+
+    Long timestamp = longValue(node, "timestamp", "time", "created", "createdAt", "updated", "updatedAt", "date");
+
+    return new Transaction(
+        id,
+        symbol,
+        market,
+        amount,
+        amountQuote,
+        price,
+        timestamp,
+        side,
+        fee,
+        feeCurrency,
+        type);
+  }
+
+  private static String text(JsonNode node, String... keys) {
+    for (String key : keys) {
+      JsonNode candidate = node.get(key);
+      if (candidate == null || candidate.isNull()) {
+        continue;
+      }
+      if (candidate.isTextual()) {
+        String value = candidate.asText();
+        if (!value.isBlank()) {
+          return value;
+        }
+      } else if (candidate.isNumber() || candidate.isBoolean()) {
+        return candidate.asText();
+      }
+    }
+    return null;
+  }
+
+  private static BigDecimal decimal(JsonNode node, String... keys) {
+    for (String key : keys) {
+      JsonNode candidate = node.get(key);
+      BigDecimal parsed = parseDecimal(candidate);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  private static BigDecimal parseDecimal(JsonNode node) {
+    if (node == null || node.isNull()) {
+      return null;
+    }
+    if (node.isNumber() || node.isTextual()) {
+      try {
+        String raw = node.asText();
+        if (raw == null || raw.isBlank()) {
+          return null;
+        }
+        return new BigDecimal(raw.trim());
+      } catch (Exception ignored) {
+        return null;
+      }
+    }
+    if (node.isObject()) {
+      BigDecimal nested = decimal(node, "amount", "value", "quantity", "units");
+      if (nested != null) {
+        return nested;
+      }
+    }
+    return null;
+  }
+
+  private static Long longValue(JsonNode node, String... keys) {
+    for (String key : keys) {
+      JsonNode candidate = node.get(key);
+      if (candidate == null || candidate.isNull()) {
+        continue;
+      }
+      if (candidate.isNumber()) {
+        return candidate.asLong();
+      }
+      if (!candidate.isTextual()) {
+        continue;
+      }
+      String value = candidate.asText();
+      if (value == null || value.isBlank()) {
+        continue;
+      }
+      try {
+        return Long.parseLong(value.trim());
+      } catch (Exception ignored) {
+      }
+      try {
+        return Instant.parse(value.trim()).toEpochMilli();
+      } catch (Exception ignored) {
+      }
+      try {
+        return OffsetDateTime.parse(value.trim()).toInstant().toEpochMilli();
+      } catch (Exception ignored) {
+      }
+    }
+    return null;
+  }
+
+  private static String abbreviate(String value) {
+    if (value == null) {
+      return "";
+    }
+    String compact = value.replaceAll("\\s+", " ").trim();
+    return compact.length() <= 240 ? compact : compact.substring(0, 240) + "...";
   }
 
   private SignedHeaders signedHeaders(String apiKey, String apiSecret, String method, String path, String body) {

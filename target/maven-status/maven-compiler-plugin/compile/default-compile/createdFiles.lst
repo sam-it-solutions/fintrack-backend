@@ -100,7 +100,6 @@ com/fintrack/model/AccountType.class
 com/fintrack/model/TransactionDirection.class
 com/fintrack/service/UserService.class
 com/fintrack/dto/CurrencySummary.class
-com/fintrack/provider/bitvavo/BitvavoClient$5.class
 com/fintrack/service/TinkService.class
 com/fintrack/dto/UpdateTransactionCategoryRequest.class
 com/fintrack/provider/SyncResult.class
@@ -157,7 +156,6 @@ com/fintrack/config/CorsConfig.class
 com/fintrack/dto/RecategorizeResponse.class
 com/fintrack/service/HouseholdService.class
 com/fintrack/service/TransactionCategorizer$RuleMatch.class
-com/fintrack/provider/bitvavo/BitvavoClient$4.class
 com/fintrack/controller/AuthController.class
 com/fintrack/provider/coingecko/CoinGeckoClient$1.class
 com/fintrack/service/PasskeyService.class
