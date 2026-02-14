@@ -54,6 +54,19 @@ public class BitvavoClient {
 
   public List<Transaction> getTransactions(String apiKey, String apiSecret, List<String> markets) {
     List<Transaction> collected = new ArrayList<>();
+
+    // Pull full paged account history first (buy/sell only), so invested amount can be
+    // calculated from complete trade history instead of the 24h-limited /trades endpoint.
+    try {
+      List<Transaction> buys = requestAccountHistoryAllPages(apiKey, apiSecret, "buy");
+      List<Transaction> sells = requestAccountHistoryAllPages(apiKey, apiSecret, "sell");
+      collected.addAll(buys);
+      collected.addAll(sells);
+      log.info("Bitvavo API /account/history paged returned buys={}, sells={}", buys.size(), sells.size());
+    } catch (Exception ex) {
+      log.warn("Bitvavo API paged /account/history failed: {}", ex.getMessage());
+    }
+
     long nowMs = Instant.now().toEpochMilli();
     try {
       List<Transaction> result = requestTransactions(apiKey, apiSecret, "/account/history?type=trade&start=0&end=" + nowMs);
@@ -176,13 +189,13 @@ public class BitvavoClient {
 
   private List<Transaction> requestTransactions(String apiKey, String apiSecret, String path) {
     String raw = requestSignedJson(apiKey, apiSecret, path);
-    return parseTransactionsResponse(raw);
+    return parseTransactionsPage(raw).items();
   }
 
   private List<Transaction> requestTrades(String apiKey, String apiSecret, String market) {
     String path = "/trades?market=" + market;
     String raw = requestSignedJson(apiKey, apiSecret, path);
-    return parseTransactionsResponse(raw);
+    return parseTransactionsPage(raw).items();
   }
 
   private String requestSignedJson(String apiKey, String apiSecret, String path) {
@@ -198,15 +211,15 @@ public class BitvavoClient {
         .body(String.class);
   }
 
-  private List<Transaction> parseTransactionsResponse(String raw) {
+  private TransactionsPage parseTransactionsPage(String raw) {
     if (raw == null || raw.isBlank()) {
-      return List.of();
+      return new TransactionsPage(List.of(), null, null);
     }
     try {
       JsonNode root = objectMapper.readTree(raw);
       JsonNode arrayNode = findTransactionArray(root);
       if (arrayNode == null || !arrayNode.isArray()) {
-        return List.of();
+        return new TransactionsPage(List.of(), intValue(root, "currentPage", "page"), intValue(root, "totalPages", "pages"));
       }
       List<Transaction> transactions = new ArrayList<>();
       for (JsonNode item : arrayNode) {
@@ -215,10 +228,45 @@ public class BitvavoClient {
           transactions.add(tx);
         }
       }
-      return transactions;
+      return new TransactionsPage(
+          transactions,
+          intValue(root, "currentPage", "page"),
+          intValue(root, "totalPages", "pages"));
     } catch (Exception ex) {
       throw new IllegalStateException("Failed to parse Bitvavo transactions payload: " + abbreviate(raw), ex);
     }
+  }
+
+  private List<Transaction> requestAccountHistoryAllPages(String apiKey, String apiSecret, String type) {
+    List<Transaction> all = new ArrayList<>();
+    int page = 1;
+    int maxPages = 200;
+
+    while (page <= maxPages) {
+      String path = "/account/history?type=" + type + "&page=" + page + "&maxItems=100";
+      String raw = requestSignedJson(apiKey, apiSecret, path);
+      TransactionsPage parsed = parseTransactionsPage(raw);
+      List<Transaction> pageItems = parsed.items();
+      all.addAll(pageItems);
+
+      Integer current = parsed.currentPage();
+      Integer total = parsed.totalPages();
+      log.info("Bitvavo API {} returned {}", path, pageItems.size());
+
+      if (pageItems.isEmpty()) {
+        break;
+      }
+      if (total != null && current != null) {
+        if (current >= total) {
+          break;
+        }
+      } else if (pageItems.size() < 100) {
+        // No pagination metadata returned; short page means end.
+        break;
+      }
+      page++;
+    }
+    return all;
   }
 
   private JsonNode findTransactionArray(JsonNode node) {
@@ -434,6 +482,25 @@ public class BitvavoClient {
     return null;
   }
 
+  private static Integer intValue(JsonNode node, String... keys) {
+    for (String key : keys) {
+      JsonNode candidate = node.get(key);
+      if (candidate == null || candidate.isNull()) {
+        continue;
+      }
+      if (candidate.isInt() || candidate.isLong()) {
+        return candidate.asInt();
+      }
+      if (candidate.isTextual()) {
+        try {
+          return Integer.parseInt(candidate.asText().trim());
+        } catch (Exception ignored) {
+        }
+      }
+    }
+    return null;
+  }
+
   private static String abbreviate(String value) {
     if (value == null) {
       return "";
@@ -467,6 +534,8 @@ public class BitvavoClient {
   }
 
   public record SignedHeaders(String apiKey, String signature, String timestamp) {}
+
+  private record TransactionsPage(List<Transaction> items, Integer currentPage, Integer totalPages) {}
 
   public record Balance(String symbol, BigDecimal available, BigDecimal inOrder) {}
 

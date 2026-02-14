@@ -73,6 +73,7 @@ com/fintrack/repository/UserRepository.class
 com/fintrack/dto/HouseholdRequest.class
 com/fintrack/service/FinanceService$1.class
 com/fintrack/dto/CategoryRequest.class
+com/fintrack/provider/bitvavo/BitvavoClient$TransactionsPage.class
 com/fintrack/provider/ConnectionProvider.class
 com/fintrack/dto/CreateTransactionRequest.class
 com/fintrack/dto/UpdateAccountRequest.class
