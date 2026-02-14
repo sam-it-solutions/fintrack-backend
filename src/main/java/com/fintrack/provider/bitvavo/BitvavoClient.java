@@ -5,7 +5,9 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
@@ -45,21 +47,26 @@ public class BitvavoClient {
   }
 
   public List<Transaction> getTransactions(String apiKey, String apiSecret, List<String> markets) {
+    List<Transaction> collected = new ArrayList<>();
     try {
       List<Transaction> result = requestTransactions(apiKey, apiSecret, "/transactions");
       log.info("Bitvavo API /transactions returned {}", result == null ? 0 : result.size());
-      return result;
-    } catch (HttpClientErrorException.NotFound ex) {
-      log.info("Bitvavo API /transactions not found, falling back to /trades");
-      if (markets == null || markets.isEmpty()) {
-        return List.of();
+      if (result != null) {
+        collected.addAll(result);
       }
-      List<Transaction> all = new ArrayList<>();
+    } catch (HttpClientErrorException.NotFound ex) {
+      log.info("Bitvavo API /transactions not found");
+    } catch (Exception ex) {
+      log.warn("Bitvavo API /transactions failed: {}", ex.getMessage());
+    }
+
+    if (markets != null && !markets.isEmpty()) {
+      List<Transaction> tradesAllMarkets = new ArrayList<>();
       for (String market : markets) {
         try {
           List<Transaction> trades = requestTrades(apiKey, apiSecret, market);
           if (trades != null) {
-            all.addAll(trades);
+            tradesAllMarkets.addAll(trades);
           }
         } catch (HttpClientErrorException.BadRequest badRequest) {
           log.warn("Bitvavo API /trades failed for market {}: {}", market, badRequest.getMessage());
@@ -67,9 +74,37 @@ public class BitvavoClient {
           log.warn("Bitvavo API /trades failed for market {}: {}", market, innerEx.getMessage());
         }
       }
-      log.info("Bitvavo API /trades returned {}", all.size());
-      return all;
+      log.info("Bitvavo API /trades returned {}", tradesAllMarkets.size());
+      collected.addAll(tradesAllMarkets);
     }
+
+    if (collected.isEmpty()) {
+      return List.of();
+    }
+
+    // Deduplicate transactions/trades that can overlap across endpoints.
+    Map<String, Transaction> deduped = new LinkedHashMap<>();
+    for (Transaction tx : collected) {
+      if (tx == null) {
+        continue;
+      }
+      String key = transactionKey(tx);
+      deduped.putIfAbsent(key, tx);
+    }
+    return new ArrayList<>(deduped.values());
+  }
+
+  private static String transactionKey(Transaction tx) {
+    if (tx.id() != null && !tx.id().isBlank()) {
+      return "id:" + tx.id();
+    }
+    return String.join("|",
+        "m:" + (tx.market() == null ? "" : tx.market()),
+        "s:" + (tx.symbol() == null ? "" : tx.symbol()),
+        "t:" + (tx.timestamp() == null ? "" : tx.timestamp()),
+        "a:" + (tx.amount() == null ? "" : tx.amount().toPlainString()),
+        "p:" + (tx.price() == null ? "" : tx.price().toPlainString()),
+        "d:" + (tx.side() == null ? "" : tx.side()));
   }
 
   public List<TickerPrice> getTickerPrices() {
