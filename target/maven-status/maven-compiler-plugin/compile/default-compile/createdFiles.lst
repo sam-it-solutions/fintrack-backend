@@ -122,6 +122,7 @@ com/fintrack/dto/HouseholdResponse.class
 com/fintrack/service/ConnectionService.class
 com/fintrack/provider/coingecko/CoinGeckoClient.class
 com/fintrack/provider/coingecko/CoinGeckoClient$SearchResponse.class
+com/fintrack/provider/degirocsv/DegiroCsvProvider.class
 com/fintrack/model/HouseholdMember.class
 com/fintrack/service/PasskeyCredentialStore$Base64Url.class
 com/fintrack/dto/CreateAccountRequest.class
@@ -131,6 +132,7 @@ com/fintrack/service/TinkService$1.class
 com/fintrack/config/GeminiProperties.class
 com/fintrack/dto/AiKeyTestResponse.class
 com/fintrack/service/ConnectionService$1.class
+com/fintrack/provider/degirocsv/DegiroCsvProvider$DegiroRow.class
 com/fintrack/dto/AccountShareRequest.class
 com/fintrack/dto/SummaryResponse.class
 com/fintrack/controller/AdminSettingsController.class

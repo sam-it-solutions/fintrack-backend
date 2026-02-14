@@ -130,5 +130,6 @@
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/Connection.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/config/MailProperties.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/RecategorizeResponse.java
+/Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/provider/degirocsv/DegiroCsvProvider.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/provider/ConnectResult.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/model/HouseholdMember.java

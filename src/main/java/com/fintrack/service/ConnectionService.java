@@ -17,6 +17,7 @@ import com.fintrack.repository.ConnectionRepository;
 import com.fintrack.repository.UserRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -85,6 +86,17 @@ public class ConnectionService {
     }
     if (request.getAutoSyncEnabled() != null) {
       connection.setAutoSyncEnabled(request.getAutoSyncEnabled());
+    }
+    if (request.getConfig() != null) {
+      Map<String, String> mergedConfig = new HashMap<>(loadConfig(connection));
+      for (Map.Entry<String, String> entry : request.getConfig().entrySet()) {
+        if (entry.getValue() == null || entry.getValue().isBlank()) {
+          mergedConfig.remove(entry.getKey());
+        } else {
+          mergedConfig.put(entry.getKey(), entry.getValue());
+        }
+      }
+      connection.setEncryptedConfig(storeConfig(mergedConfig));
     }
     return toResponse(connectionRepository.save(connection));
   }
