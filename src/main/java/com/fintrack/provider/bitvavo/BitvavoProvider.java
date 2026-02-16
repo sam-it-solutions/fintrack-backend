@@ -252,6 +252,11 @@ public class BitvavoProvider implements ConnectionProvider {
         }
         InvestState state = investmentStateBySymbol.get(symbol);
         BigDecimal invested = state == null ? BigDecimal.ZERO : state.costEur.max(BigDecimal.ZERO);
+        if (state == null) {
+          log.info("Bitvavo invested {}: no trade history found, set 0", symbol);
+        } else {
+          log.info("Bitvavo invested {}: units={}, costEur={}", symbol, state.units, invested);
+        }
         account.setOpeningBalance(invested);
         accountRepository.save(account);
       }

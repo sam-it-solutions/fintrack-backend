@@ -55,16 +55,25 @@ public class BitvavoClient {
   public List<Transaction> getTransactions(String apiKey, String apiSecret, List<String> markets) {
     List<Transaction> collected = new ArrayList<>();
 
-    // Pull full paged account history first (buy/sell only), so invested amount can be
-    // calculated from complete trade history instead of the 24h-limited /trades endpoint.
+    // Pull full account history first, so invested amount is based on complete history.
     try {
-      List<Transaction> buys = requestAccountHistoryAllPages(apiKey, apiSecret, "buy");
-      List<Transaction> sells = requestAccountHistoryAllPages(apiKey, apiSecret, "sell");
-      collected.addAll(buys);
-      collected.addAll(sells);
-      log.info("Bitvavo API /account/history paged returned buys={}, sells={}", buys.size(), sells.size());
+      List<Transaction> trades = requestAccountHistoryAllByOffset(apiKey, apiSecret, "trade");
+      collected.addAll(trades);
+      log.info("Bitvavo API /account/history full trade history returned {}", trades.size());
+    } catch (HttpClientErrorException.BadRequest ex) {
+      log.info("Bitvavo API /account/history type=trade not supported");
     } catch (Exception ex) {
-      log.warn("Bitvavo API paged /account/history failed: {}", ex.getMessage());
+      log.warn("Bitvavo API full /account/history type=trade failed: {}", ex.getMessage());
+    }
+
+    if (collected.isEmpty()) {
+      try {
+        List<Transaction> all = requestAccountHistoryAllByOffset(apiKey, apiSecret, null);
+        collected.addAll(all);
+        log.info("Bitvavo API /account/history full history returned {}", all.size());
+      } catch (Exception ex) {
+        log.warn("Bitvavo API full /account/history fallback failed: {}", ex.getMessage());
+      }
     }
 
     long nowMs = Instant.now().toEpochMilli();
@@ -237,34 +246,38 @@ public class BitvavoClient {
     }
   }
 
-  private List<Transaction> requestAccountHistoryAllPages(String apiKey, String apiSecret, String type) {
+  private List<Transaction> requestAccountHistoryAllByOffset(String apiKey, String apiSecret, String type) {
     List<Transaction> all = new ArrayList<>();
-    int page = 1;
-    int maxPages = 200;
-
-    while (page <= maxPages) {
-      String path = "/account/history?type=" + type + "&page=" + page + "&maxItems=100";
+    int start = 0;
+    int limit = 1000;
+    String previousFirstKey = null;
+    for (int i = 0; i < 200; i++) {
+      StringBuilder pathBuilder = new StringBuilder("/account/history?start=").append(start).append("&limit=").append(limit);
+      if (type != null && !type.isBlank()) {
+        pathBuilder.append("&type=").append(type);
+      }
+      String path = pathBuilder.toString();
       String raw = requestSignedJson(apiKey, apiSecret, path);
       TransactionsPage parsed = parseTransactionsPage(raw);
       List<Transaction> pageItems = parsed.items();
-      all.addAll(pageItems);
-
-      Integer current = parsed.currentPage();
-      Integer total = parsed.totalPages();
       log.info("Bitvavo API {} returned {}", path, pageItems.size());
-
       if (pageItems.isEmpty()) {
         break;
       }
-      if (total != null && current != null) {
-        if (current >= total) {
-          break;
-        }
-      } else if (pageItems.size() < 100) {
-        // No pagination metadata returned; short page means end.
+      String firstKey = transactionKey(pageItems.get(0));
+      if (previousFirstKey != null && previousFirstKey.equals(firstKey)) {
+        log.warn("Bitvavo API {} appears to repeat first item; stopping pagination loop", path);
         break;
       }
-      page++;
+      previousFirstKey = firstKey;
+      all.addAll(pageItems);
+      if (pageItems.isEmpty()) {
+        break;
+      }
+      if (pageItems.size() < limit) {
+        break;
+      }
+      start += pageItems.size();
     }
     return all;
   }
@@ -329,6 +342,38 @@ public class BitvavoClient {
     BigDecimal price = decimal(node, "price", "fillPrice", "avgPrice", "averagePrice", "rate");
     BigDecimal amountQuote = decimal(node, "amountQuote", "quoteAmount", "filledAmountQuote", "cost");
     String quoteCurrency = text(node, "priceCurrency", "quoteCurrency");
+    if (quoteCurrency == null && market != null && market.contains("-")) {
+      quoteCurrency = market.substring(market.indexOf('-') + 1);
+    }
+    if (symbol == null && market != null && market.contains("-")) {
+      symbol = market.substring(0, market.indexOf('-'));
+    }
+    if (side == null && symbol != null) {
+      if (sentCurrency != null && sentCurrency.equalsIgnoreCase(symbol)) {
+        side = "sell";
+      } else if (receivedCurrency != null && receivedCurrency.equalsIgnoreCase(symbol)) {
+        side = "buy";
+      }
+    }
+    if (side == null && sentCurrency != null && receivedCurrency != null) {
+      if (isLikelyQuoteCurrency(sentCurrency) && !isLikelyQuoteCurrency(receivedCurrency)) {
+        side = "buy";
+        if (symbol == null) {
+          symbol = receivedCurrency;
+        }
+        if (quoteCurrency == null) {
+          quoteCurrency = sentCurrency;
+        }
+      } else if (isLikelyQuoteCurrency(receivedCurrency) && !isLikelyQuoteCurrency(sentCurrency)) {
+        side = "sell";
+        if (symbol == null) {
+          symbol = sentCurrency;
+        }
+        if (quoteCurrency == null) {
+          quoteCurrency = receivedCurrency;
+        }
+      }
+    }
     if (side != null && "buy".equalsIgnoreCase(side)) {
       // Legacy /account/history payload: sent = quote, received = base.
       if (amount == null) {
@@ -356,6 +401,20 @@ public class BitvavoClient {
       }
       if (quoteCurrency == null) {
         quoteCurrency = receivedCurrency;
+      }
+    }
+    if (amount == null && symbol != null) {
+      if (sentCurrency != null && sentCurrency.equalsIgnoreCase(symbol)) {
+        amount = sentAmount;
+      } else if (receivedCurrency != null && receivedCurrency.equalsIgnoreCase(symbol)) {
+        amount = receivedAmount;
+      }
+    }
+    if (amountQuote == null && quoteCurrency != null) {
+      if (sentCurrency != null && sentCurrency.equalsIgnoreCase(quoteCurrency)) {
+        amountQuote = sentAmount;
+      } else if (receivedCurrency != null && receivedCurrency.equalsIgnoreCase(quoteCurrency)) {
+        amountQuote = receivedAmount;
       }
     }
     if (market == null && symbol != null && quoteCurrency != null) {
@@ -499,6 +558,14 @@ public class BitvavoClient {
       }
     }
     return null;
+  }
+
+  private static boolean isLikelyQuoteCurrency(String currency) {
+    if (currency == null || currency.isBlank()) {
+      return false;
+    }
+    String value = currency.toUpperCase();
+    return "EUR".equals(value) || "USD".equals(value) || "USDT".equals(value) || "USDC".equals(value) || "BTC".equals(value);
   }
 
   private static String abbreviate(String value) {
