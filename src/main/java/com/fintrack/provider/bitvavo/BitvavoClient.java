@@ -158,13 +158,18 @@ public class BitvavoClient {
       if (pageItems.isEmpty()) {
         break;
       }
-      if (pageItems.size() < maxItems) {
-        break;
-      }
       if (parsed.totalPages() != null) {
         lastTotalPages = parsed.totalPages();
       }
-      if (lastTotalPages != null && page >= lastTotalPages) {
+      // If API returns totalPages, trust it over item-count heuristics.
+      if (lastTotalPages != null) {
+        if (page >= lastTotalPages) {
+          break;
+        }
+        continue;
+      }
+      // Fallback when totalPages is absent.
+      if (pageItems.size() < maxItems) {
         break;
       }
     }
