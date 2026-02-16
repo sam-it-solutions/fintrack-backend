@@ -57,13 +57,26 @@ public class BitvavoClient {
   public List<Transaction> getTransactions(String apiKey, String apiSecret, List<String> markets) {
     List<Transaction> collected = new ArrayList<>();
 
-    // Prefer paged history without filters. Some Bitvavo accounts reject type/start/limit params.
+    // Prefer paged history according to Bitvavo docs (page/maxItems, optional type).
     try {
-      List<Transaction> paged = requestAccountHistoryAllByPage(apiKey, apiSecret);
+      List<Transaction> paged = requestAccountHistoryAllByPage(apiKey, apiSecret, null);
       collected.addAll(paged);
       log.info("Bitvavo API /account/history paged full history returned {}", paged.size());
     } catch (Exception ex) {
       log.warn("Bitvavo API paged /account/history failed: {}", ex.getMessage());
+    }
+
+    // Some accounts seem to return incomplete mixed history; add explicit buy/sell pages as supplement.
+    for (String type : List.of("buy", "sell")) {
+      try {
+        List<Transaction> typed = requestAccountHistoryAllByPage(apiKey, apiSecret, type);
+        if (!typed.isEmpty()) {
+          collected.addAll(typed);
+          log.info("Bitvavo API /account/history type={} supplemental returned {}", type, typed.size());
+        }
+      } catch (Exception ex) {
+        log.warn("Bitvavo API paged /account/history type={} failed: {}", type, ex.getMessage());
+      }
     }
 
     long nowMs = Instant.now().toEpochMilli();
@@ -81,13 +94,13 @@ public class BitvavoClient {
 
     if (collected.isEmpty()) {
       try {
-        List<Transaction> result = requestTransactions(apiKey, apiSecret, "/account/history?start=0&end=" + nowMs);
-        log.info("Bitvavo API /account/history?start=0 returned {}", result == null ? 0 : result.size());
+        List<Transaction> result = requestTransactions(apiKey, apiSecret, "/account/history?fromDate=0&toDate=" + nowMs);
+        log.info("Bitvavo API /account/history?fromDate=0 returned {}", result == null ? 0 : result.size());
         if (result != null) {
           collected.addAll(result);
         }
       } catch (Exception ex) {
-        log.warn("Bitvavo API /account/history?start=0 failed: {}", ex.getMessage());
+        log.warn("Bitvavo API /account/history?fromDate=0 failed: {}", ex.getMessage());
       }
     }
 
@@ -127,13 +140,16 @@ public class BitvavoClient {
     return new ArrayList<>(deduped.values());
   }
 
-  private List<Transaction> requestAccountHistoryAllByPage(String apiKey, String apiSecret) {
+  private List<Transaction> requestAccountHistoryAllByPage(String apiKey, String apiSecret, String type) {
     List<Transaction> all = new ArrayList<>();
     int maxPages = 200;
     int maxItems = HISTORY_PAGE_SIZE;
     Integer lastTotalPages = null;
     for (int page = 1; page <= maxPages; page++) {
       String path = "/account/history?page=" + page + "&maxItems=" + maxItems;
+      if (type != null && !type.isBlank()) {
+        path = path + "&type=" + type;
+      }
       String raw = requestSignedJson(apiKey, apiSecret, path);
       TransactionsPage parsed = parseTransactionsPage(raw);
       List<Transaction> pageItems = parsed.items();
