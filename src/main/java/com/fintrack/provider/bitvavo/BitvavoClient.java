@@ -55,58 +55,26 @@ public class BitvavoClient {
   public List<Transaction> getTransactions(String apiKey, String apiSecret, List<String> markets) {
     List<Transaction> collected = new ArrayList<>();
 
-    // Pull full account history first, so invested amount is based on complete history.
+    // Prefer paged history without filters. Some Bitvavo accounts reject type/start/limit params.
     try {
-      List<Transaction> trades = requestAccountHistoryAllByOffset(apiKey, apiSecret, "trade");
-      collected.addAll(trades);
-      log.info("Bitvavo API /account/history full trade history returned {}", trades.size());
-    } catch (HttpClientErrorException.BadRequest ex) {
-      log.info("Bitvavo API /account/history type=trade not supported");
+      List<Transaction> paged = requestAccountHistoryAllByPage(apiKey, apiSecret);
+      collected.addAll(paged);
+      log.info("Bitvavo API /account/history paged full history returned {}", paged.size());
     } catch (Exception ex) {
-      log.warn("Bitvavo API full /account/history type=trade failed: {}", ex.getMessage());
-    }
-
-    if (collected.isEmpty()) {
-      try {
-        List<Transaction> all = requestAccountHistoryAllByOffset(apiKey, apiSecret, null);
-        collected.addAll(all);
-        log.info("Bitvavo API /account/history full history returned {}", all.size());
-      } catch (Exception ex) {
-        log.warn("Bitvavo API full /account/history fallback failed: {}", ex.getMessage());
-      }
+      log.warn("Bitvavo API paged /account/history failed: {}", ex.getMessage());
     }
 
     long nowMs = Instant.now().toEpochMilli();
-    try {
-      List<Transaction> result = requestTransactions(apiKey, apiSecret, "/account/history?type=trade&start=0&end=" + nowMs);
-      log.info("Bitvavo API /account/history?type=trade&start=0 returned {}", result == null ? 0 : result.size());
-      if (result != null) {
-        collected.addAll(result);
-      }
-    } catch (HttpClientErrorException.BadRequest ex) {
-      log.info("Bitvavo API /account/history?type=trade&start=0 not supported, retrying without date range");
+    if (collected.isEmpty()) {
       try {
-        List<Transaction> result = requestTransactions(apiKey, apiSecret, "/account/history?type=trade");
-        log.info("Bitvavo API /account/history?type=trade returned {}", result == null ? 0 : result.size());
+        List<Transaction> result = requestTransactions(apiKey, apiSecret, "/account/history");
+        log.info("Bitvavo API /account/history returned {}", result == null ? 0 : result.size());
         if (result != null) {
           collected.addAll(result);
         }
-      } catch (Exception innerEx) {
-        log.warn("Bitvavo API /account/history?type=trade failed: {}", innerEx.getMessage());
+      } catch (Exception ex) {
+        log.warn("Bitvavo API /account/history plain failed: {}", ex.getMessage());
       }
-    } catch (HttpClientErrorException.NotFound ex) {
-      log.info("Bitvavo API /account/history not found, trying legacy endpoint");
-      try {
-        List<Transaction> result = requestTransactions(apiKey, apiSecret, "/transactions");
-        log.info("Bitvavo API /transactions returned {}", result == null ? 0 : result.size());
-        if (result != null) {
-          collected.addAll(result);
-        }
-      } catch (Exception innerEx) {
-        log.warn("Bitvavo API /transactions failed: {}", innerEx.getMessage());
-      }
-    } catch (Exception ex) {
-      log.warn("Bitvavo API /account/history failed: {}", ex.getMessage());
     }
 
     if (collected.isEmpty()) {
@@ -118,18 +86,6 @@ public class BitvavoClient {
         }
       } catch (Exception ex) {
         log.warn("Bitvavo API /account/history?start=0 failed: {}", ex.getMessage());
-      }
-    }
-
-    if (collected.isEmpty()) {
-      try {
-        List<Transaction> result = requestTransactions(apiKey, apiSecret, "/account/history");
-        log.info("Bitvavo API /account/history returned {}", result == null ? 0 : result.size());
-        if (result != null) {
-          collected.addAll(result);
-        }
-      } catch (Exception ex) {
-        log.warn("Bitvavo API /account/history plain failed: {}", ex.getMessage());
       }
     }
 
@@ -165,6 +121,34 @@ public class BitvavoClient {
       deduped.putIfAbsent(key, tx);
     }
     return new ArrayList<>(deduped.values());
+  }
+
+  private List<Transaction> requestAccountHistoryAllByPage(String apiKey, String apiSecret) {
+    List<Transaction> all = new ArrayList<>();
+    int maxPages = 200;
+    int maxItems = 1000;
+    Integer lastTotalPages = null;
+    for (int page = 1; page <= maxPages; page++) {
+      String path = "/account/history?page=" + page + "&maxItems=" + maxItems;
+      String raw = requestSignedJson(apiKey, apiSecret, path);
+      TransactionsPage parsed = parseTransactionsPage(raw);
+      List<Transaction> pageItems = parsed.items();
+      log.info("Bitvavo API {} returned {}", path, pageItems.size());
+      all.addAll(pageItems);
+      if (pageItems.isEmpty()) {
+        break;
+      }
+      if (pageItems.size() < maxItems) {
+        break;
+      }
+      if (parsed.totalPages() != null) {
+        lastTotalPages = parsed.totalPages();
+      }
+      if (lastTotalPages != null && page >= lastTotalPages) {
+        break;
+      }
+    }
+    return all;
   }
 
   private static String transactionKey(Transaction tx) {
