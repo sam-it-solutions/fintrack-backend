@@ -28,6 +28,8 @@ public class BitvavoClient {
   private static final String USER_AGENT = "Fintrack/1.0";
   private static final Logger log = LoggerFactory.getLogger(BitvavoClient.class);
   private static final String[] TX_ARRAY_KEYS = {"history", "transactions", "items", "rows", "data", "result"};
+  // Bitvavo account history docs: maxItems/limit must be between 1 and 100.
+  private static final int HISTORY_PAGE_SIZE = 100;
 
   private final RestClient restClient;
   private final ObjectMapper objectMapper;
@@ -89,7 +91,7 @@ public class BitvavoClient {
       }
     }
 
-    if (collected.isEmpty() && markets != null && !markets.isEmpty()) {
+    if (markets != null && !markets.isEmpty()) {
       List<Transaction> tradesAllMarkets = new ArrayList<>();
       for (String market : markets) {
         try {
@@ -103,8 +105,10 @@ public class BitvavoClient {
           log.warn("Bitvavo API /trades failed for market {}: {}", market, innerEx.getMessage());
         }
       }
-      log.info("Bitvavo API /trades returned {}", tradesAllMarkets.size());
-      collected.addAll(tradesAllMarkets);
+      if (!tradesAllMarkets.isEmpty()) {
+        log.info("Bitvavo API /trades supplemental returned {}", tradesAllMarkets.size());
+        collected.addAll(tradesAllMarkets);
+      }
     }
 
     if (collected.isEmpty()) {
@@ -126,7 +130,7 @@ public class BitvavoClient {
   private List<Transaction> requestAccountHistoryAllByPage(String apiKey, String apiSecret) {
     List<Transaction> all = new ArrayList<>();
     int maxPages = 200;
-    int maxItems = 1000;
+    int maxItems = HISTORY_PAGE_SIZE;
     Integer lastTotalPages = null;
     for (int page = 1; page <= maxPages; page++) {
       String path = "/account/history?page=" + page + "&maxItems=" + maxItems;
@@ -233,7 +237,7 @@ public class BitvavoClient {
   private List<Transaction> requestAccountHistoryAllByOffset(String apiKey, String apiSecret, String type) {
     List<Transaction> all = new ArrayList<>();
     int start = 0;
-    int limit = 1000;
+    int limit = HISTORY_PAGE_SIZE;
     String previousFirstKey = null;
     for (int i = 0; i < 200; i++) {
       StringBuilder pathBuilder = new StringBuilder("/account/history?start=").append(start).append("&limit=").append(limit);
