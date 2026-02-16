@@ -99,8 +99,11 @@ public class BitvavoProvider implements ConnectionProvider {
     List<BitvavoClient.Balance> balances = client.getBalances(apiKey, apiSecret);
     log.info("Bitvavo sync balances: {}", balances == null ? 0 : balances.size());
     List<String> markets = balances == null ? List.of() : balances.stream()
-        .map(balance -> balance.symbol() == null ? null : balance.symbol().toUpperCase() + "-EUR")
-        .filter(market -> market != null && !market.startsWith("EUR-"))
+        .map(BitvavoClient.Balance::symbol)
+        .filter(Objects::nonNull)
+        .map(String::toUpperCase)
+        .filter(symbol -> !"EUR".equals(symbol))
+        .map(symbol -> symbol + "-EUR")
         .distinct()
         .toList();
     List<BitvavoClient.Market> availableMarkets;
@@ -110,17 +113,28 @@ public class BitvavoProvider implements ConnectionProvider {
       log.warn("Bitvavo sync markets failed: {}", ex.getMessage());
       availableMarkets = List.of();
     }
-    Set<String> validEurMarkets = availableMarkets == null ? Set.of() : availableMarkets.stream()
+    Set<String> validMarkets = availableMarkets == null ? Set.of() : availableMarkets.stream()
         .filter(market -> market.market() != null)
-        .filter(market -> "EUR".equalsIgnoreCase(market.quote()))
         .filter(market -> market.status() == null || "trading".equalsIgnoreCase(market.status()))
         .map(market -> market.market().toUpperCase())
         .collect(Collectors.toSet());
-    if (!validEurMarkets.isEmpty()) {
+    if (!validMarkets.isEmpty() && balances != null) {
+      Set<String> heldSymbols = balances.stream()
+          .map(BitvavoClient.Balance::symbol)
+          .filter(Objects::nonNull)
+          .map(String::toUpperCase)
+          .filter(symbol -> !"EUR".equals(symbol))
+          .collect(Collectors.toSet());
       int originalCount = markets.size();
-      markets = markets.stream().filter(validEurMarkets::contains).toList();
+      markets = availableMarkets.stream()
+          .filter(market -> market.market() != null && market.base() != null)
+          .filter(market -> market.status() == null || "trading".equalsIgnoreCase(market.status()))
+          .filter(market -> heldSymbols.contains(market.base().toUpperCase()))
+          .map(market -> market.market().toUpperCase())
+          .distinct()
+          .toList();
       if (originalCount != markets.size()) {
-        log.info("Bitvavo sync filtered invalid markets: {} -> {}", originalCount, markets.size());
+        log.info("Bitvavo sync expanded markets for held assets: {} -> {}", originalCount, markets.size());
       }
     }
     Map<String, BigDecimal> fallbackPrices = balances == null ? Map.of() : coinGeckoClient.getEurPricesBySymbols(
