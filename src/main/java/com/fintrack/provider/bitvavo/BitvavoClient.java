@@ -140,6 +140,40 @@ public class BitvavoClient {
     return new ArrayList<>(deduped.values());
   }
 
+  public RawHistoryResponse getAccountHistoryRaw(String apiKey,
+                                                 String apiSecret,
+                                                 Integer page,
+                                                 Integer maxItems,
+                                                 String type,
+                                                 Long fromDate,
+                                                 Long toDate) {
+    int safePage = page == null || page < 1 ? 1 : page;
+    int safeMaxItems = maxItems == null ? HISTORY_PAGE_SIZE : Math.max(1, Math.min(100, maxItems));
+    StringBuilder path = new StringBuilder("/account/history?page=")
+        .append(safePage)
+        .append("&maxItems=")
+        .append(safeMaxItems);
+    if (type != null && !type.isBlank()) {
+      path.append("&type=").append(type.trim());
+    }
+    if (fromDate != null) {
+      path.append("&fromDate=").append(fromDate);
+    }
+    if (toDate != null) {
+      path.append("&toDate=").append(toDate);
+    }
+    String requestPath = path.toString();
+    String raw = requestSignedJson(apiKey, apiSecret, requestPath);
+    TransactionsPage parsed = parseTransactionsPage(raw);
+    return new RawHistoryResponse(
+        requestPath,
+        raw,
+        parsed.items(),
+        parsed.items() == null ? 0 : parsed.items().size(),
+        parsed.currentPage(),
+        parsed.totalPages());
+  }
+
   private List<Transaction> requestAccountHistoryAllByPage(String apiKey, String apiSecret, String type) {
     List<Transaction> all = new ArrayList<>();
     int maxPages = 200;
@@ -612,6 +646,14 @@ public class BitvavoClient {
   public record SignedHeaders(String apiKey, String signature, String timestamp) {}
 
   private record TransactionsPage(List<Transaction> items, Integer currentPage, Integer totalPages) {}
+
+  public record RawHistoryResponse(
+      String requestPath,
+      String raw,
+      List<Transaction> items,
+      int itemCount,
+      Integer currentPage,
+      Integer totalPages) {}
 
   public record Balance(String symbol, BigDecimal available, BigDecimal inOrder) {}
 

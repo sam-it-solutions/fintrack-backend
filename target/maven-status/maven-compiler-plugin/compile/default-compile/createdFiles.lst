@@ -36,12 +36,14 @@ com/fintrack/provider/tink/TinkProvider.class
 com/fintrack/controller/FinanceController.class
 com/fintrack/repository/HouseholdMemberRepository.class
 com/fintrack/config/TinkProperties.class
+com/fintrack/service/BitvavoDebugService$1.class
 com/fintrack/dto/HouseholdBalanceResponse.class
 com/fintrack/config/OpenAiProperties.class
 com/fintrack/model/FinancialAccount.class
 com/fintrack/dto/CategoryResponse.class
 com/fintrack/provider/enablebanking/EnableBankingProvider.class
 com/fintrack/config/AppProperties.class
+com/fintrack/provider/bitvavo/BitvavoClient$RawHistoryResponse.class
 com/fintrack/service/RuleService$1.class
 com/fintrack/dto/RecurringPaymentResponse.class
 com/fintrack/dto/AuthResponse.class
@@ -119,6 +121,7 @@ com/fintrack/service/SyncProgressService.class
 com/fintrack/service/PasskeyCredentialStore.class
 com/fintrack/service/RefreshTokenService.class
 com/fintrack/dto/HouseholdResponse.class
+com/fintrack/service/BitvavoDebugService.class
 com/fintrack/service/ConnectionService.class
 com/fintrack/provider/coingecko/CoinGeckoClient.class
 com/fintrack/provider/coingecko/CoinGeckoClient$SearchResponse.class

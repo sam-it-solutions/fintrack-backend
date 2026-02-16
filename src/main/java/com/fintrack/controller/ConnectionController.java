@@ -7,6 +7,8 @@ import com.fintrack.dto.CreateConnectionRequest;
 import com.fintrack.dto.EnableBankingAspspResponse;
 import com.fintrack.dto.ProviderResponse;
 import com.fintrack.dto.UpdateConnectionRequest;
+import com.fintrack.provider.bitvavo.BitvavoClient;
+import com.fintrack.service.BitvavoDebugService;
 import com.fintrack.service.ConnectionService;
 import com.fintrack.service.CurrentUserService;
 import com.fintrack.service.EnableBankingService;
@@ -36,17 +38,20 @@ public class ConnectionController {
   private final AppProperties appProperties;
   private final TinkService tinkService;
   private final EnableBankingService enableBankingService;
+  private final BitvavoDebugService bitvavoDebugService;
 
   public ConnectionController(ConnectionService connectionService,
                               CurrentUserService currentUserService,
                               AppProperties appProperties,
                               TinkService tinkService,
-                              EnableBankingService enableBankingService) {
+                              EnableBankingService enableBankingService,
+                              BitvavoDebugService bitvavoDebugService) {
     this.connectionService = connectionService;
     this.currentUserService = currentUserService;
     this.appProperties = appProperties;
     this.tinkService = tinkService;
     this.enableBankingService = enableBankingService;
+    this.bitvavoDebugService = bitvavoDebugService;
   }
 
   @GetMapping("/providers")
@@ -160,6 +165,17 @@ public class ConnectionController {
   public ConnectionResponse sync(@PathVariable UUID connectionId) {
     UUID userId = currentUserService.requireUserId();
     return connectionService.syncConnection(userId, connectionId);
+  }
+
+  @GetMapping("/connections/{connectionId}/bitvavo/raw-history")
+  public BitvavoClient.RawHistoryResponse bitvavoRawHistory(@PathVariable UUID connectionId,
+                                                             @RequestParam(name = "page", required = false) Integer page,
+                                                             @RequestParam(name = "maxItems", required = false) Integer maxItems,
+                                                             @RequestParam(name = "type", required = false) String type,
+                                                             @RequestParam(name = "fromDate", required = false) Long fromDate,
+                                                             @RequestParam(name = "toDate", required = false) Long toDate) {
+    UUID userId = currentUserService.requireUserId();
+    return bitvavoDebugService.getRawHistory(userId, connectionId, page, maxItems, type, fromDate, toDate);
   }
 
   @DeleteMapping("/connections/{connectionId}")

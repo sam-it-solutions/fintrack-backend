@@ -4,6 +4,7 @@
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/AuthResponse.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/ProviderField.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/config/GeminiProperties.java
+/Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/service/BitvavoDebugService.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/dto/AdminSettingsRequest.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/repository/HouseholdRepository.java
 /Users/sampoelmans/Documents/SamITSolutions/financesp/finance-backend/src/main/java/com/fintrack/config/CorsConfig.java
